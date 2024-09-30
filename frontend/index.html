@@ -3,10 +3,42 @@
 <body>
     <script src="out/tsumego.js"></script>
     <script type="text/javascript">
-        const board = new BoardView(Board.empty(9));
-        document.body.appendChild(board.canvas);
+        const board = `b
+.bw..
+.bw..
+.bw..
+bbw..
+www..`;
+        let tsumego = Tsumego.fromJSON(`{
+            "board": ${JSON.stringify(board)},
+            "tree": {
+                "A1": {"A2": {"A3": {"A2": "lose"}}},
+                "A2": "win",
+                "A3": {"A2": {"A1": {"A2": "lose"}}}
+            }
+        }`);
+        
+        const view = new BoardView(tsumego.board);
+        view.playEnabled = true;
+        
+        view.onPlay((row, col) => {
+            tsumego = tsumego.play(row, col);
+            
+            view.setBoard(tsumego.board);
+            view.playEnabled = false;
+            
+            if(!tsumego.isComplete()) {
+                setTimeout(() => {
+                    tsumego = tsumego.playRandom();
+                    view.setBoard(tsumego.board);
+                    view.playEnabled = !tsumego.isComplete();
+                }, 500);
+            }
+        });
+        
+        document.body.appendChild(view.canvas);
         function loop() {
-            board.draw();
+            view.draw();
             requestAnimationFrame(loop);
         }
         loop();

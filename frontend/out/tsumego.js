@@ -342,6 +342,11 @@ class BoardView {
     // These are initialised by the call to `setBoard`
     board;
     cellSize;
+    /**
+     * Determines whether the board view accepts click events to play stones.
+     * Also controls whether hovered stones are drawn.
+     */
+    playEnabled = false;
     hoveredRow = -1;
     hoveredCol = -1;
     constructor(board) {
@@ -350,32 +355,32 @@ class BoardView {
         canvas.width = BoardView.CANVAS_SIZE;
         canvas.height = BoardView.CANVAS_SIZE;
         this.ctx = canvas.getContext('2d');
-        const hover = (e) => {
+        canvas.addEventListener('mouseenter', e => this.onHover(e));
+        canvas.addEventListener('mousemove', e => this.onHover(e));
+        canvas.addEventListener('mouseleave', e => this.onMouseLeave());
+    }
+    onPlay(callback) {
+        this.canvas.addEventListener('click', e => {
             const [row, col] = this.fromXY(e);
-            if (this.board.isLegal(row, col)) {
-                this.hoveredRow = row;
-                this.hoveredCol = col;
+            if (this.playEnabled && this.board.isLegal(row, col)) {
+                callback(row, col);
             }
-            else {
-                unHover(e);
-            }
-        };
-        const unHover = (e) => {
-            this.hoveredRow = -1;
-            this.hoveredCol = -1;
-        };
-        canvas.addEventListener('mouseenter', hover);
-        canvas.addEventListener('mousemove', hover);
-        canvas.addEventListener('mouseleave', unHover);
-        canvas.addEventListener('click', (e) => {
-            hover(e);
-            const row = this.hoveredRow;
-            const col = this.hoveredCol;
-            if (this.board.isLegal(row, col)) {
-                this.setBoard(this.board.play(row, col));
-                unHover(e);
-            }
+            this.onHover(e);
         });
+    }
+    onHover(e) {
+        const [row, col] = this.fromXY(e);
+        if (this.board.isLegal(row, col)) {
+            this.hoveredRow = row;
+            this.hoveredCol = col;
+        }
+        else {
+            this.onMouseLeave();
+        }
+    }
+    onMouseLeave() {
+        this.hoveredRow = -1;
+        this.hoveredCol = -1;
     }
     setBoard(board) {
         this.board = board;
@@ -408,7 +413,7 @@ class BoardView {
             for (let col = 0; col < board.size; ++col) {
                 const there = board.at(row, col);
                 const isStone = there === 'b' || there === 'w';
-                const isHovered = row === this.hoveredRow && col === this.hoveredCol;
+                const isHovered = this.playEnabled && row === this.hoveredRow && col === this.hoveredCol;
                 const [x, y] = this.xy(row, col);
                 // Draw a star point if there is one
                 if (!isStone && BoardView.isStarPoint(board.size, row, col)) {

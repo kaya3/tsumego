@@ -104,9 +104,17 @@ declare class BoardView {
     private readonly ctx;
     private board;
     private cellSize;
+    /**
+     * Determines whether the board view accepts click events to play stones.
+     * Also controls whether hovered stones are drawn.
+     */
+    playEnabled: boolean;
     private hoveredRow;
     private hoveredCol;
     constructor(board: Board);
+    onPlay(callback: (row: number, col: number) => void): void;
+    private onHover;
+    private onMouseLeave;
     setBoard(board: Board): void;
     draw(): void;
     /**
