@@ -1,0 +1,11 @@
+{
+    "compileOnSave": true,
+    "compilerOptions": {
+        "strict": true,
+        "outFile": "out/tsumego.js",
+        "target": "ESNext",
+        "lib": ["ESNext", "DOM"],
+        "declaration": true,
+    },
+    "include": ["src/**/*", "lib/**/*.d.ts"],
+}

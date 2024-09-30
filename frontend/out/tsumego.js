@@ -1,7 +1,4 @@
-type StoneColour = 'b' | 'w'
-
-type StoneColourOrEmpty = StoneColour | '.'
-
+"use strict";
 /**
  * A board position.
  */
@@ -9,55 +6,48 @@ class Board {
     /**
      * Represents the board position as a multi-line string.
      */
-    public readonly board: string;
-    
+    board;
     /**
      * The board size. The board is square, so this is the dimension on both
      * sides.
      */
-    public readonly size: number;
-    
-    public constructor(board: string) {
+    size;
+    constructor(board) {
         this.board = board;
-        
         const rows = board.split('\n');
         const size = this.size = rows.length - 1;
-        
-        if(rows[0] !== 'b' && rows[0] !== 'w') {
+        if (rows[0] !== 'b' && rows[0] !== 'w') {
             throw new Error(`Invalid next player; expected 'b' or 'w', was '${rows[0]}'`);
         }
-        
-        for(let i = 1; i < rows.length; ++i) {
+        for (let i = 1; i < rows.length; ++i) {
             const row = rows[i];
-            if(row.length !== size) {
+            if (row.length !== size) {
                 throw new Error(`Board rows are not equal size; expected length ${size}, was ${row.length}\n${board}`);
-            } else if(!/^[bw\.#]+$/.test(row)) {
+            }
+            else if (!/^[bw\.#]+$/.test(row)) {
                 throw new Error(`Board rows are not equal size; expected length ${size}, was ${row.length}\n${board}`);
             }
         }
     }
-    
     /**
      * Returns the player whose turn it is next ('b' or 'w').
      */
-    public nextPlayer(): StoneColour {
-        return this.board[0] as StoneColour;
+    nextPlayer() {
+        return this.board[0];
     }
-    
     /**
      * Returns the stone colour ('b' or 'w') at the given coordinates, or '.'
      * if there is no stone there.
      */
-    public at(row: number, col: number): StoneColourOrEmpty {
+    at(row, col) {
         const size = this.size;
-        if(row < 0 || row >= size || col < 0 || col >= this.size) {
+        if (row < 0 || row >= size || col < 0 || col >= this.size) {
             throw new Error(`Row or column index out of bounds for board size = ${size}; was row = ${row}, col = ${col}`);
         }
-        
         // The board string begins with one character for the next player, then
         // a newline character. Each row is (size + 1) characters long because
         // of the newline.
         const index = 2 + row * (size + 1) + col;
-        return this.board[index] as StoneColourOrEmpty;
+        return this.board[index];
     }
 }
