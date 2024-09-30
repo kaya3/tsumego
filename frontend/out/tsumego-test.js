@@ -20,7 +20,7 @@ bb...
         Assert.equal('b', board.at(0, 1), 'Black stone at B1');
         Assert.equal('.', board.at(1, 0), 'Empty space at A2');
     }
-    testLegalUnoccupied() {
+    testIllegalOccupied() {
         const board = new Board(this.board);
         Assert.isFalse(board.isLegal(0, 0), 'Point occupied by white stone is an illegal move');
         Assert.isFalse(board.isLegal(0, 1), 'Point occupied by black stone is an illegal move');

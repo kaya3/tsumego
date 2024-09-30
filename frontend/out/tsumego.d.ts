@@ -8,9 +8,14 @@ declare class IllegalMove extends Error {
     constructor(board: Board, row: number, col: number, reason: 'occupied' | 'ko recapture' | 'self-capture');
 }
 /**
- * A board position.
+ * A board position, including the stones on the board, the next colour to
+ * play, and the state of any ko.
  */
 declare class Board {
+    /**
+     * Constructs an empty board position of the given size. Black will be the
+     * first player.
+     */
     static empty(size: number): Board;
     /**
      * Represents the board position as a multi-line string.
@@ -43,10 +48,16 @@ declare class Board {
      * Converts coordinates to an index into the board string.
      */
     private index;
+    private isInBounds;
+    /**
+     * Returns the indices of all points which are adjacent to the point given
+     * by `index`.
+     */
     private neighbours;
     /**
      * Removes captured stones of the given `colour` from the `board`, starting
-     * at `index`. Returns the number of stones captured.
+     * at `index`. Returns the number of stones captured, which may be zero if
+     * the chain is not captured.
      */
     private removeCaptures;
     /**
@@ -63,19 +74,26 @@ declare class BoardView {
     static readonly LINE_COLOUR = "black";
     static readonly LINE_THICKNESS = 2;
     static readonly HOVERED_ALPHA = 0.5;
+    static readonly STAR_POINT_SIZE: number;
     static readonly KO_BAN_SIZE: number;
     readonly canvas: HTMLCanvasElement;
     private readonly ctx;
     private board;
     private cellSize;
-    private halfCellSize;
-    private starPointSize;
     private hoveredRow;
     private hoveredCol;
     constructor(board: Board);
     setBoard(board: Board): void;
     draw(): void;
+    /**
+     * Returns the (x, y) coordinates of the centre of the given point,
+     * relative to the canvas origin.
+     */
     private xy;
+    /**
+     * Returns the (row, col) coordinates of the point which contains the mouse
+     * cursor. They may be out of bounds of the current board.
+     */
     private fromXY;
     private static isStarPoint;
 }

@@ -89,7 +89,7 @@ class BoardView {
         
         // Stones and decorations
         const stoneSize = (cellSize - BoardView.LINE_THICKNESS) / 2;
-        const starPointSize = cellSize * BoardView.KO_BAN_SIZE;
+        const starPointSize = cellSize * BoardView.STAR_POINT_SIZE;
         
         for(let row = 0; row < board.size; ++row) {
             for(let col = 0; col < board.size; ++col) {
@@ -108,7 +108,8 @@ class BoardView {
                 
                 // Draw a square to indicate ko ban, if there is one
                 if(there === '#') {
-                    ctx.strokeRect(x - starPointSize, y - starPointSize, starPointSize * 2, starPointSize * 2);
+                    const koBanSize = Math.round(cellSize * BoardView.KO_BAN_SIZE);
+                    ctx.strokeRect(x - koBanSize, y - koBanSize, koBanSize * 2, koBanSize * 2);
                 }
                 
                 // Draw a stone if there is one

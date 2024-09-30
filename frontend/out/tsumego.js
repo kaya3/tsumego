@@ -13,9 +13,14 @@ class IllegalMove extends Error {
     }
 }
 /**
- * A board position.
+ * A board position, including the stones on the board, the next colour to
+ * play, and the state of any ko.
  */
 class Board {
+    /**
+     * Constructs an empty board position of the given size. Black will be the
+     * first player.
+     */
     static empty(size) {
         if (size <= 1) {
             throw new Error(`Board size must be at least 2, was ${size}`);
@@ -37,6 +42,10 @@ class Board {
         this.board = board;
         const rows = board.split('\n');
         const size = this.size = rows.length - 1;
+        // Validation
+        if (size < 2 || size > 25) {
+            throw new Error(`Board size must be between 2 and 25; was ${size}`);
+        }
         if (rows[0] !== 'b' && rows[0] !== 'w') {
             throw new Error(`Invalid next player; expected 'b' or 'w', was '${rows[0]}'`);
         }
@@ -73,7 +82,7 @@ class Board {
      */
     isLegal(row, col) {
         // Move is illegal if it is out of bounds
-        if (row < 0 || row >= this.size || col < 0 || col >= this.size) {
+        if (!this.isInBounds(row, col)) {
             return false;
         }
         // Move is illegal if there is already a stone there, or a ko ban '#'
@@ -134,15 +143,22 @@ class Board {
      * Converts coordinates to an index into the board string.
      */
     index(row, col) {
-        const size = this.size;
-        if (row < 0 || row >= size || col < 0 || col >= this.size) {
-            throw new Error(`Row or column index out of bounds for board size = ${size}; was row = ${row}, col = ${col}`);
+        if (!this.isInBounds(row, col)) {
+            throw new Error(`Row or column index out of bounds for board size = ${this.size}; was row = ${row}, col = ${col}`);
         }
         // The board string begins with one character for the next player, then
         // a newline character. Each row is (size + 1) characters long because
         // of the newline.
-        return 2 + row * (size + 1) + col;
+        return 2 + row * (this.size + 1) + col;
     }
+    isInBounds(row, col) {
+        const size = this.size;
+        return row >= 0 && row < size && col >= 0 && col < size;
+    }
+    /**
+     * Returns the indices of all points which are adjacent to the point given
+     * by `index`.
+     */
     neighbours(index) {
         const size = this.size;
         // Invert index calculation
@@ -165,11 +181,13 @@ class Board {
     }
     /**
      * Removes captured stones of the given `colour` from the `board`, starting
-     * at `index`. Returns the number of stones captured.
+     * at `index`. Returns the number of stones captured, which may be zero if
+     * the chain is not captured.
      */
     removeCaptures(board, index, colour) {
         const stack = [index];
         const seen = new Set(stack);
+        // Find stones connected to this one by depth-first search
         while (stack.length > 0) {
             index = stack.pop();
             for (const neighbour of this.neighbours(index)) {
@@ -187,9 +205,11 @@ class Board {
                 }
             }
         }
+        // Remove the captured stones from the board
         for (const removedIndex of seen) {
             board[removedIndex] = '.';
         }
+        // Return the number of captured stones
         return seen.size;
     }
     /**
@@ -225,14 +245,13 @@ class BoardView {
     static LINE_COLOUR = 'black';
     static LINE_THICKNESS = 2;
     static HOVERED_ALPHA = 0.5;
-    static KO_BAN_SIZE = 2 / 3;
+    static STAR_POINT_SIZE = 1 / 12;
+    static KO_BAN_SIZE = 1 / 3;
     canvas;
     ctx;
     // These are initialised by the call to `setBoard`
     board;
     cellSize;
-    halfCellSize;
-    starPointSize;
     hoveredRow = -1;
     hoveredCol = -1;
     constructor(board) {
@@ -241,42 +260,39 @@ class BoardView {
         canvas.width = BoardView.CANVAS_SIZE;
         canvas.height = BoardView.CANVAS_SIZE;
         this.ctx = canvas.getContext('2d');
-        const onHover = (e) => {
+        const hover = (e) => {
             const [row, col] = this.fromXY(e);
             if (this.board.isLegal(row, col)) {
                 this.hoveredRow = row;
                 this.hoveredCol = col;
             }
             else {
-                this.hoveredRow = -1;
-                this.hoveredCol = -1;
+                unHover(e);
             }
         };
         const unHover = (e) => {
             this.hoveredRow = -1;
             this.hoveredCol = -1;
         };
-        canvas.addEventListener('mouseenter', onHover);
-        canvas.addEventListener('mousemove', onHover);
+        canvas.addEventListener('mouseenter', hover);
+        canvas.addEventListener('mousemove', hover);
         canvas.addEventListener('mouseleave', unHover);
         canvas.addEventListener('click', (e) => {
-            onHover(e);
-            if (this.hoveredRow >= 0 && this.hoveredCol >= 0) {
-                this.setBoard(this.board.play(this.hoveredRow, this.hoveredCol));
+            hover(e);
+            const row = this.hoveredRow;
+            const col = this.hoveredCol;
+            if (this.board.isLegal(row, col)) {
+                this.setBoard(this.board.play(row, col));
                 unHover(e);
             }
         });
     }
     setBoard(board) {
         this.board = board;
-        const size = board.size;
-        const cellSize = Math.floor(BoardView.CANVAS_SIZE / (size + 1));
-        this.cellSize = cellSize;
-        this.halfCellSize = Math.floor(cellSize / 2);
-        this.starPointSize = Math.floor(cellSize / 12);
+        this.cellSize = Math.floor(BoardView.CANVAS_SIZE / (board.size + 1));
     }
     draw() {
-        const { ctx, board, halfCellSize, starPointSize } = this;
+        const { ctx, board, cellSize } = this;
         ctx.clearRect(0, 0, BoardView.CANVAS_SIZE, BoardView.CANVAS_SIZE);
         // Board colour
         ctx.fillStyle = BoardView.BOARD_COLOUR;
@@ -295,13 +311,15 @@ class BoardView {
             ctx.lineTo(offset, end);
         }
         ctx.stroke();
-        // Stones
+        // Stones and decorations
+        const stoneSize = (cellSize - BoardView.LINE_THICKNESS) / 2;
+        const starPointSize = cellSize * BoardView.STAR_POINT_SIZE;
         for (let row = 0; row < board.size; ++row) {
             for (let col = 0; col < board.size; ++col) {
-                const isHovered = row === this.hoveredRow && col === this.hoveredCol;
                 const there = board.at(row, col);
-                const [x, y] = this.xy(row, col);
                 const isStone = there === 'b' || there === 'w';
+                const isHovered = row === this.hoveredRow && col === this.hoveredCol;
+                const [x, y] = this.xy(row, col);
                 // Draw a star point if there is one
                 if (!isStone && BoardView.isStarPoint(board.size, row, col)) {
                     ctx.fillStyle = BoardView.LINE_COLOUR;
@@ -311,8 +329,8 @@ class BoardView {
                 }
                 // Draw a square to indicate ko ban, if there is one
                 if (there === '#') {
-                    const r = Math.floor(halfCellSize * BoardView.KO_BAN_SIZE);
-                    ctx.strokeRect(x - r, y - r, r * 2, r * 2);
+                    const koBanSize = Math.round(cellSize * BoardView.KO_BAN_SIZE);
+                    ctx.strokeRect(x - koBanSize, y - koBanSize, koBanSize * 2, koBanSize * 2);
                 }
                 // Draw a stone if there is one
                 if (isStone || isHovered) {
@@ -322,7 +340,7 @@ class BoardView {
                         ctx.globalAlpha = BoardView.HOVERED_ALPHA;
                     }
                     ctx.beginPath();
-                    ctx.ellipse(x, y, halfCellSize - BoardView.LINE_THICKNESS / 2, halfCellSize - BoardView.LINE_THICKNESS / 2, 0, 0, Math.PI * 2);
+                    ctx.ellipse(x, y, stoneSize, stoneSize, 0, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.stroke();
                     if (isHovered) {
@@ -332,12 +350,20 @@ class BoardView {
             }
         }
     }
+    /**
+     * Returns the (x, y) coordinates of the centre of the given point,
+     * relative to the canvas origin.
+     */
     xy(row, col) {
         return [
             (col + 1) * this.cellSize,
             (row + 1) * this.cellSize,
         ];
     }
+    /**
+     * Returns the (row, col) coordinates of the point which contains the mouse
+     * cursor. They may be out of bounds of the current board.
+     */
     fromXY(e) {
         return [
             Math.round(e.offsetY / this.cellSize) - 1,

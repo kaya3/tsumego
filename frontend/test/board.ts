@@ -26,7 +26,7 @@ bb...
         Assert.equal('.', board.at(1, 0), 'Empty space at A2');
     }
     
-    testLegalUnoccupied() {
+    testIllegalOccupied() {
         const board = new Board(this.board);
         
         Assert.isFalse(board.isLegal(0, 0), 'Point occupied by white stone is an illegal move');
@@ -160,7 +160,7 @@ bw.w.
 b#bw.
 .bw..
 .....`;
-        Assert.equal(expectedPosition, newBoard.toString(), 'New position has the new stone, and the captured stone is replaced with a ko ban')
+        Assert.equal(expectedPosition, newBoard.toString(), 'New position has the new stone, and the captured stone is replaced with a ko ban');
     }
     
     testKoBan() {
