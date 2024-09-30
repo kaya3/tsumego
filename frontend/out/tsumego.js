@@ -237,6 +237,96 @@ class Board {
         }
     }
 }
+/**
+ * Converts row and column indices to a string like `'A4'`. The letter
+ * represents the column and the number represents the row. By convention, the
+ * top-left of the board is `'A1'`, and there is no 'I' column.
+ */
+function toCoordinates(row, col) {
+    if (row < 0 || row >= 25 || col < 0 || col >= 25) {
+        throw new Error(`Row or column indices must be between 0 and 24; was row = ${row}, col = ${col}`);
+    }
+    // No 'I' column, by convention
+    const alphabet = 'ABCDEFGHJKLMNOPQRSTUVWXYZ';
+    return `${alphabet[col]}${row + 1}`;
+}
+/**
+ * Parses a coordinate string like `'A4'` to row and column indices.
+ */
+function fromCoordinates(coordinates) {
+    // 65 is 'A'
+    let col = coordinates.charCodeAt(0) - 65;
+    // Correct for missing 'I' column
+    if (col >= 9) {
+        col--;
+    }
+    const row = parseInt(coordinates.substring(1)) - 1;
+    return [row, col];
+}
+class Tsumego {
+    board;
+    tree;
+    static fromJSON(json) {
+        const obj = JSON.parse(json);
+        if (!('board' in obj) || typeof obj.board !== 'string') {
+            throw new Error(`Tsumego JSON object must have 'board' property of type 'string'`);
+        }
+        const board = new Board(obj.board);
+        if (!('tree' in obj)) {
+            throw new Error(`Tsumego JSON object must have 'tree' property which is a valid variation tree`);
+        }
+        Tsumego.validateTree(board, obj.tree);
+        return new Tsumego(board, obj.tree);
+    }
+    static validateTree(board, tree) {
+        if (tree === 'win' || tree === 'lose') {
+            return;
+        }
+        else if (!tree || typeof tree !== 'object') {
+            throw new Error("Tsumego tree must be 'win', 'lose' or an object");
+        }
+        const pairs = Object.entries(tree);
+        if (pairs.length === 0) {
+            throw new Error('Tsumego tree object must have at least one entry');
+        }
+        for (const [coords, childTree] of pairs) {
+            const [row, col] = fromCoordinates(coords);
+            if (!board.isLegal(row, col)) {
+                throw new Error(`Tsumego tree contains illegal move '${coords}'`);
+            }
+            const childBoard = board.play(row, col);
+            Tsumego.validateTree(childBoard, childTree);
+        }
+    }
+    constructor(board, tree) {
+        this.board = board;
+        this.tree = tree;
+    }
+    isComplete() {
+        return this.tree === 'win' || this.tree === 'lose';
+    }
+    isWon() {
+        return this.tree === 'win';
+    }
+    play(row, col) {
+        if (typeof this.tree !== 'object') {
+            throw new Error('Tried to play a move in a completed tsumego');
+        }
+        const newBoard = this.board.play(row, col);
+        // Playing a move out of the tree is automatically a loss
+        const newTree = this.tree[toCoordinates(row, col)] ?? 'lose';
+        return new Tsumego(newBoard, newTree);
+    }
+    playRandom() {
+        if (typeof this.tree !== 'object') {
+            throw new Error('Tried to play a move in a completed tsumego');
+        }
+        const options = Object.keys(this.tree);
+        const coords = options[Math.floor(options.length * Math.random())];
+        const [row, col] = fromCoordinates(coords);
+        return this.play(row, col);
+    }
+}
 class BoardView {
     static CANVAS_SIZE = 500;
     static BOARD_COLOUR = '#907040';

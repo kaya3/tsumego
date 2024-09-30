@@ -66,6 +66,30 @@ declare class Board {
      */
     private markKoBan;
 }
+/**
+ * Converts row and column indices to a string like `'A4'`. The letter
+ * represents the column and the number represents the row. By convention, the
+ * top-left of the board is `'A1'`, and there is no 'I' column.
+ */
+declare function toCoordinates(row: number, col: number): string;
+/**
+ * Parses a coordinate string like `'A4'` to row and column indices.
+ */
+declare function fromCoordinates(coordinates: string): [row: number, col: number];
+type VariationTree = 'win' | 'lose' | {
+    readonly [moveCoordinates: string]: VariationTree;
+};
+declare class Tsumego {
+    readonly board: Board;
+    private readonly tree;
+    static fromJSON(json: string): Tsumego;
+    private static validateTree;
+    private constructor();
+    isComplete(): boolean;
+    isWon(): boolean;
+    play(row: number, col: number): Tsumego;
+    playRandom(): Tsumego;
+}
 declare class BoardView {
     static readonly CANVAS_SIZE = 500;
     static readonly BOARD_COLOUR = "#907040";
