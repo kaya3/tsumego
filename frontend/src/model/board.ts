@@ -17,6 +17,16 @@ class IllegalMove extends Error {
  * A board position.
  */
 class Board {
+    public static empty(size: number): Board {
+        if(size <= 1) {
+            throw new Error(`Board size must be at least 2, was ${size}`);
+        }
+        
+        const row = '.'.repeat(size);
+        const board = 'b' + `\n${row}`.repeat(size);
+        return new Board(board);
+    }
+    
     /**
      * Represents the board position as a multi-line string.
      */

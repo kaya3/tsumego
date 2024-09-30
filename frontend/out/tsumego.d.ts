@@ -11,6 +11,7 @@ declare class IllegalMove extends Error {
  * A board position.
  */
 declare class Board {
+    static empty(size: number): Board;
     /**
      * Represents the board position as a multi-line string.
      */
@@ -53,4 +54,18 @@ declare class Board {
      * labels the ko recapture as an illegal move in the next board position.
      */
     private markKoBan;
+}
+declare class BoardView {
+    static readonly CANVAS_SIZE = 500;
+    static readonly BOARD_COLOUR = "#907040";
+    static readonly BLACK_STONE_COLOUR = "#202028";
+    static readonly WHITE_STONE_COLOUR = "#fffff0";
+    static readonly LINE_COLOUR = "black";
+    static readonly LINE_THICKNESS = "2px";
+    private board;
+    readonly canvas: HTMLCanvasElement;
+    private readonly ctx;
+    constructor(board: Board);
+    draw(): void;
+    private static isStarPoint;
 }

@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <script src="out/tsumego.js"></script>
+    <script type="text/javascript">
+        const board = new BoardView(Board.empty(9).play(3, 3).play(6, 6));
+        document.body.appendChild(board.canvas);
+        board.draw();
+    </script>
+</body>
+</html>
