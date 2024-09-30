@@ -22,10 +22,10 @@ class Board {
         for (let i = 1; i < rows.length; ++i) {
             const row = rows[i];
             if (row.length !== size) {
-                throw new Error(`Board rows are not equal size; expected length ${size}, was ${row.length}\n${board}`);
+                throw new Error(`Board row length should equal board height; expected width ${size}, was ${row.length}\n${board}`);
             }
             else if (!/^[bw\.#]+$/.test(row)) {
-                throw new Error(`Board rows are not equal size; expected length ${size}, was ${row.length}\n${board}`);
+                throw new Error(`Board position has invalid character; expected only 'b', 'w', '.', '#'\n${board}`);
             }
         }
     }
