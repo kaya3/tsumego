@@ -3,9 +3,13 @@
 <body>
     <script src="out/tsumego.js"></script>
     <script type="text/javascript">
-        const board = new BoardView(Board.empty(9).play(3, 3).play(6, 6));
+        const board = new BoardView(Board.empty(9));
         document.body.appendChild(board.canvas);
-        board.draw();
+        function loop() {
+            board.draw();
+            requestAnimationFrame(loop);
+        }
+        loop();
     </script>
 </body>
 </html>

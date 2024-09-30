@@ -83,6 +83,11 @@ class Board {
      * to play at the given coordinates.
      */
     public isLegal(row: number, col: number): boolean {
+        // Move is illegal if it is out of bounds
+        if(row < 0 || row >= this.size || col < 0 || col >= this.size) {
+            return false;
+        }
+        
         // Move is illegal if there is already a stone there, or a ko ban '#'
         if(this.at(row, col) !== '.') {
             return false;

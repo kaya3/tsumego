@@ -61,11 +61,21 @@ declare class BoardView {
     static readonly BLACK_STONE_COLOUR = "#202028";
     static readonly WHITE_STONE_COLOUR = "#fffff0";
     static readonly LINE_COLOUR = "black";
-    static readonly LINE_THICKNESS = "2px";
-    private board;
+    static readonly LINE_THICKNESS = 2;
+    static readonly HOVERED_ALPHA = 0.5;
+    static readonly KO_BAN_SIZE: number;
     readonly canvas: HTMLCanvasElement;
     private readonly ctx;
+    private board;
+    private cellSize;
+    private halfCellSize;
+    private starPointSize;
+    private hoveredRow;
+    private hoveredCol;
     constructor(board: Board);
+    setBoard(board: Board): void;
     draw(): void;
+    private xy;
+    private fromXY;
     private static isStarPoint;
 }
