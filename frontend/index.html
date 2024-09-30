@@ -9,7 +9,7 @@
 .bw..
 bbw..
 www..`;
-        let tsumego = Tsumego.fromJSON(`{
+        const tsumego = Tsumego.fromJSON(`{
             "board": ${JSON.stringify(board)},
             "tree": {
                 "A1": {"A2": {"A3": {"A2": "lose"}}},
@@ -18,22 +18,12 @@ www..`;
             }
         }`);
         
-        const view = new BoardView(tsumego.board);
-        view.playEnabled = true;
+        const view = new TsumegoView(tsumego);
         
-        view.onPlay((row, col) => {
-            tsumego = tsumego.play(row, col);
+        view.onComplete(win => {
+            console.log(win ? 'You won!' : 'You lost');
             
-            view.setBoard(tsumego.board);
-            view.playEnabled = false;
-            
-            if(!tsumego.isComplete()) {
-                setTimeout(() => {
-                    tsumego = tsumego.playRandom();
-                    view.setBoard(tsumego.board);
-                    view.playEnabled = !tsumego.isComplete();
-                }, 500);
-            }
+            setTimeout(() => view.setTsumego(tsumego), 1000);
         });
         
         document.body.appendChild(view.canvas);

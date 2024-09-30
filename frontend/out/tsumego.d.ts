@@ -129,3 +129,15 @@ declare class BoardView {
     private fromXY;
     private static isStarPoint;
 }
+declare class TsumegoView extends BoardView {
+    tsumego: Tsumego;
+    /**
+     * Wait this long, in milliseconds, between the player's move and the
+     * opponent's response.
+     */
+    moveDelay: number;
+    private readonly onCompleteCallbacks;
+    constructor(tsumego: Tsumego);
+    setTsumego(tsumego: Tsumego): void;
+    onComplete(callback: (win: boolean) => void): void;
+}

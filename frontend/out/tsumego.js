@@ -491,3 +491,43 @@ class BoardView {
         return false;
     }
 }
+class TsumegoView extends BoardView {
+    tsumego;
+    /**
+     * Wait this long, in milliseconds, between the player's move and the
+     * opponent's response.
+     */
+    moveDelay = 500;
+    onCompleteCallbacks = [];
+    constructor(tsumego) {
+        if (tsumego.board.nextPlayer() !== 'b') {
+            throw new Error('TsumegoView must be initialised with black to play');
+        }
+        super(tsumego.board);
+        this.tsumego = tsumego;
+        this.playEnabled = !tsumego.isComplete();
+        this.onPlay((row, col) => {
+            this.setTsumego(this.tsumego.play(row, col));
+            if (!this.tsumego.isComplete()) {
+                setTimeout(() => {
+                    this.setTsumego(this.tsumego.playRandom());
+                }, this.moveDelay);
+            }
+        });
+    }
+    setTsumego(tsumego) {
+        this.tsumego = tsumego;
+        this.playEnabled = !tsumego.isComplete() && tsumego.board.nextPlayer() === 'b';
+        this.setBoard(tsumego.board);
+        // If the tsumego is now completed, trigger callbacks
+        if (tsumego.isComplete()) {
+            const win = tsumego.isWon();
+            for (const callback of this.onCompleteCallbacks) {
+                callback(win);
+            }
+        }
+    }
+    onComplete(callback) {
+        this.onCompleteCallbacks.push(callback);
+    }
+}
