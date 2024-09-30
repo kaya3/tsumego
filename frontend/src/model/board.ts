@@ -14,9 +14,14 @@ class IllegalMove extends Error {
 }
 
 /**
- * A board position.
+ * A board position, including the stones on the board, the next colour to
+ * play, and the state of any ko.
  */
 class Board {
+    /**
+     * Constructs an empty board position of the given size. Black will be the
+     * first player.
+     */
     public static empty(size: number): Board {
         if(size <= 1) {
             throw new Error(`Board size must be at least 2, was ${size}`);
@@ -43,6 +48,11 @@ class Board {
         
         const rows = board.split('\n');
         const size = this.size = rows.length - 1;
+        
+        // Validation
+        if(size < 2 || size > 25) {
+            throw new Error(`Board size must be between 2 and 25; was ${size}`);
+        }
         
         if(rows[0] !== 'b' && rows[0] !== 'w') {
             throw new Error(`Invalid next player; expected 'b' or 'w', was '${rows[0]}'`);
@@ -84,7 +94,7 @@ class Board {
      */
     public isLegal(row: number, col: number): boolean {
         // Move is illegal if it is out of bounds
-        if(row < 0 || row >= this.size || col < 0 || col >= this.size) {
+        if(!this.isInBounds(row, col)) {
             return false;
         }
         
@@ -157,17 +167,25 @@ class Board {
      * Converts coordinates to an index into the board string.
      */
     private index(row: number, col: number): number {
-        const size = this.size;
-        if(row < 0 || row >= size || col < 0 || col >= this.size) {
-            throw new Error(`Row or column index out of bounds for board size = ${size}; was row = ${row}, col = ${col}`);
+        if(!this.isInBounds(row, col)) {
+            throw new Error(`Row or column index out of bounds for board size = ${this.size}; was row = ${row}, col = ${col}`);
         }
         
         // The board string begins with one character for the next player, then
         // a newline character. Each row is (size + 1) characters long because
         // of the newline.
-        return 2 + row * (size + 1) + col;
+        return 2 + row * (this.size + 1) + col;
     }
     
+    private isInBounds(row: number, col: number): boolean {
+        const size = this.size;
+        return row >= 0 && row < size && col >= 0 && col < size;
+    }
+    
+    /**
+     * Returns the indices of all points which are adjacent to the point given
+     * by `index`.
+     */
     private neighbours(index: number): number[] {
         const size = this.size;
         
@@ -185,12 +203,14 @@ class Board {
     
     /**
      * Removes captured stones of the given `colour` from the `board`, starting
-     * at `index`. Returns the number of stones captured.
+     * at `index`. Returns the number of stones captured, which may be zero if
+     * the chain is not captured.
      */
     private removeCaptures(board: StoneColourOrEmpty[], index: number, colour: StoneColour): number {
         const stack = [index];
         const seen = new Set(stack);
         
+        // Find stones connected to this one by depth-first search
         while(stack.length > 0) {
             index = stack.pop()!;
             for(const neighbour of this.neighbours(index)) {
@@ -208,10 +228,12 @@ class Board {
             }
         }
         
+        // Remove the captured stones from the board
         for(const removedIndex of seen) {
             board[removedIndex] = '.';
         }
         
+        // Return the number of captured stones
         return seen.size;
     }
     
