@@ -6,6 +6,8 @@ use actix_web::{
     Responder,
 };
 
+mod state;
+
 #[get("/")]
 async fn index() -> impl Responder {
     "Hello, World!"
@@ -13,7 +15,7 @@ async fn index() -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    dotenvy::dotenv().ok();
+    dotenvy::dotenv().expect("Failed to load environment variables from '.env'");
     
     let log_env = env_logger::Env::default()
         .filter("LOG")
@@ -22,11 +24,17 @@ async fn main() -> std::io::Result<()> {
         .format_module_path(false)
         .init();
     
+    let state = state::from_env().await;
+    let host_addr = state.cfg.host_addr.to_string();
+    let host_port = state.cfg.host_port;
+    
+    println!("Listening on {host_addr}:{host_port}");
+    
     HttpServer::new(|| App::new()
         .service(index)
         .wrap(Logger::default())
     )
-        .bind(("127.0.0.1", 8000))?
+        .bind((host_addr, host_port))?
         .run()
         .await
 }
