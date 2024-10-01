@@ -1,9 +1,6 @@
 #!/usr/bin/python3
 
-INPUT_PATH = 'sanderland-tsumego/problems/'
-OUTPUT_FILENAME = 'all_problems.json'
-MAX_PROBLEMS = 100
-
+import argparse
 from glob import glob
 import json
 from natsort import natsorted
@@ -31,14 +28,20 @@ def write_output(path: str, problems):
         }))
 
 def main():
-    paths = find_json_paths(INPUT_PATH, MAX_PROBLEMS)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--input_path')
+    parser.add_argument('-o', '--output_file')
+    parser.add_argument('-n', '--max_problems', type=int, default=None)
+    args = parser.parse_args()
+    
+    paths = find_json_paths(args.input_path, args.max_problems)
     
     problems = []
     num_failed = 0
     
     for path in paths:
         try:
-            problem = load_problem(path, INPUT_PATH)
+            problem = load_problem(path, args.input_path)
             
             # Ensure that every problem is "black to play"
             if problem.next_player != 'b':
@@ -51,9 +54,9 @@ def main():
             print(f'Failed to load {path}: {e}')
             num_failed += 1
     
-    write_output(OUTPUT_FILENAME, problems)
+    write_output(args.output_file, problems)
     
-    print(f'Successfully wrote {len(problems)} problem(s) to {OUTPUT_FILENAME}')
+    print(f'Successfully wrote {len(problems)} problem(s) to {args.output_file}')
     if num_failed > 0:
         print(f'Failed to convert {num_failed} problem(s)');
 
