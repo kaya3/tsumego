@@ -3,4 +3,8 @@ sanderland-tsumego/
 *.pyc
 __pycache__
 
+Cargo.lock
+.env
+
 frontend/out/
+backend/target/
