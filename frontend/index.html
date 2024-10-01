@@ -3,18 +3,11 @@
 <body>
     <script src="out/tsumego.js"></script>
     <script type="text/javascript">
-        const board = `b
-.bw..
-.bw..
-.bw..
-bbw..
-www..`;
         const tsumego = Tsumego.fromJSON(`{
-            "board": ${JSON.stringify(board)},
+            "name": "1a. Tsumego Beginner/Cho Chikun Encyclopedia Life And Death - Elementary/Prob0001.json",
+            "board": "b\\n...w...............\\nwwwwbb.............\\n.bbb...............\\n...................\\n.b.................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................",
             "tree": {
-                "A1": {"A2": {"A3": {"A2": "lose"}}},
-                "A2": "win",
-                "A3": {"A2": {"A1": {"A2": "lose"}}}
+                "B1": "win"
             }
         }`);
         
