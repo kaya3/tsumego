@@ -5,8 +5,10 @@ type VariationTree =
 
 class Tsumego {
     public static fromJSON(json: string): Tsumego {
-        const obj: object = JSON.parse(json);
-        
+        return Tsumego.fromJSONObject(JSON.parse(json));
+    }
+    
+    public static fromJSONObject(obj: object): Tsumego {
         if(!('board' in obj) || typeof obj.board !== 'string') {
             throw new Error(`Tsumego JSON object must have 'board' property of type 'string'`);
         }

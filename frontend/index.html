@@ -3,28 +3,24 @@
 <body>
     <script src="out/tsumego.js"></script>
     <script type="text/javascript">
-        const tsumego = Tsumego.fromJSON(`{
-            "name": "1a. Tsumego Beginner/Cho Chikun Encyclopedia Life And Death - Elementary/Prob0001.json",
-            "board": "b\\n...w...............\\nwwwwbb.............\\n.bbb...............\\n...................\\n.b.................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................\\n...................",
-            "tree": {
-                "B1": "win"
-            }
-        }`);
-        
-        const view = new TsumegoView(tsumego);
-        
-        view.onComplete(win => {
-            console.log(win ? 'You won!' : 'You lost');
+        TsumegoAPI.loadAllTsumego().then(allTsumego => {
+            let index = 0;
+            const view = new TsumegoView(allTsumego[0]);
             
-            setTimeout(() => view.setTsumego(tsumego), 1000);
+            view.onComplete(win => {
+                console.log(win ? 'You won!' : 'You lost');
+                
+                index = (index + 1) % allTsumego.length;
+                setTimeout(() => view.setTsumego(allTsumego[index]), 1000);
+            });
+            
+            document.body.appendChild(view.canvas);
+            function loop() {
+                view.draw();
+                requestAnimationFrame(loop);
+            }
+            loop();
         });
-        
-        document.body.appendChild(view.canvas);
-        function loop() {
-            view.draw();
-            requestAnimationFrame(loop);
-        }
-        loop();
     </script>
 </body>
 </html>
