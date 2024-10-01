@@ -1,5 +1,6 @@
 frontend/out/
 problems/sanderland-tsumego/
+problems/all_problems.json
 
 *.pyc
 __pycache__
