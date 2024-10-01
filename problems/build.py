@@ -4,6 +4,7 @@ import argparse
 from glob import glob
 import json
 from natsort import natsorted
+import os
 
 from problem import Problem
 
@@ -21,11 +22,24 @@ def load_problem(path: str, path_prefix: str):
     name = path.removeprefix(path_prefix).removesuffix('.json')
     return Problem.from_input_format(name, json.loads(json_str))
 
-def write_output(path: str, problems):
+def write_json_output(path: str, problems):
+    output = json.dumps({
+        'problems': [p.to_output_format() for p in problems],
+    })
+    
     with open(path, 'w') as output_file:
-        output_file.write(json.dumps({
-            'problems': problems,
-        }))
+        output_file.write(output)
+
+def write_sqlite_output(path: str, problems):
+    with open(path, 'w') as output_file:
+        prefix = 'INSERT OR REPLACE INTO tsumego (name, board, tree) VALUES'
+        for problem in problems:
+            name = problem.name
+            board = problem.to_board_string()
+            tree = json.dumps(problem.tree)
+            
+            output_file.write(f"{prefix}\n    ('{name}', '{board}', '{tree}')")
+            prefix = ','
 
 def main():
     parser = argparse.ArgumentParser()
@@ -33,6 +47,15 @@ def main():
     parser.add_argument('-o', '--output_file')
     parser.add_argument('-n', '--max_problems', type=int, default=None)
     args = parser.parse_args()
+    
+    output_file = args.output_file
+    if output_file.endswith('.json'):
+        write = write_json_output
+    elif output_file.endswith('.sql'):
+        write = write_sqlite_output
+    else:
+        print('Output must be a .json or .sql file')
+        os.exit(1)
     
     paths = find_json_paths(args.input_path, args.max_problems)
     
@@ -47,16 +70,16 @@ def main():
             if problem.next_player != 'b':
                 problem = problem.swap_colours()
             
-            problems.append(problem.to_output_format())
+            problems.append(problem)
         except Exception as e:
             # Some of the problems in this library have no solution, in which case
             # an error is raised; just skip these
             print(f'Failed to load {path}: {e}')
             num_failed += 1
     
-    write_output(args.output_file, problems)
+    write(output_file, problems)
     
-    print(f'Successfully wrote {len(problems)} problem(s) to {args.output_file}')
+    print(f'Successfully wrote {len(problems)} problem(s) to {output_file}')
     if num_failed > 0:
         print(f'Failed to convert {num_failed} problem(s)');
 

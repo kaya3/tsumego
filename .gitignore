@@ -5,6 +5,8 @@ __pycache__
 
 Cargo.lock
 .env
+test.db
 
 frontend/out/
 backend/target/
+problems/*.sql

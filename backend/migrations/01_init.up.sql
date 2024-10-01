@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS tsumego (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    name VARCHAR NOT NULL,
+    board VARCHAR NOT NULL,
+    tree VARCHAR NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS tsumego_name_unique on tsumego (name);

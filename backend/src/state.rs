@@ -1,6 +1,9 @@
+use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+
 pub type State = actix_web::web::Data<InnerState>;
 
 pub struct InnerState {
+    pub db: SqlitePool,
     pub cfg: Config,
 }
 
@@ -10,6 +13,9 @@ type CowStr = std::borrow::Cow<'static, str>;
 pub struct Config {
     pub host_addr: CowStr,
     pub host_port: u16,
+    
+    pub database_url: CowStr,
+    pub database_pool_size: u32,
 }
 
 pub async fn from_env() -> State {
@@ -19,7 +25,17 @@ pub async fn from_env() -> State {
             std::process::exit(1);
         });
     
+    let db = SqlitePoolOptions::new()
+        .max_connections(cfg.database_pool_size)
+        .connect(&cfg.database_url)
+        .await
+        .unwrap_or_else(|err| {
+            eprintln!("Failed to connect to the database: {err:?}");
+            std::process::exit(1);
+        });
+    
     State::new(InnerState {
+        db,
         cfg,
     })
 }
