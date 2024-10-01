@@ -12,6 +12,7 @@ paths = glob('sanderland-tsumego/problems/**/*.json', recursive=True)
 paths = natsorted(paths)
 
 problems = []
+num_failed = 0
 
 for path in paths:
     try:
@@ -26,9 +27,16 @@ for path in paths:
         
         problems.append(problem.to_output_format())
     except Exception as e:
+        # Some of the problems in this library have no solution, in which case
+        # an error is raised; just skip these
         print(f'Failed to load {path}: {e}')
+        num_failed += 1
 
 with open(OUTPUT_FILENAME, 'w') as output_file:
     output_file.write(json.dumps({
         'problems': problems,
     }))
+
+print(f'Successfully wrote {len(problems)} problem(s) to {OUTPUT_FILENAME}')
+if num_failed > 0:
+    print(f'Failed to convert {num_failed} problem(s)');

@@ -2,3 +2,4 @@ frontend/out/
 problems/sanderland-tsumego/
 
 *.pyc
+__pycache__

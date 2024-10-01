@@ -3,8 +3,14 @@ class Problem:
     def from_input_format(name, obj):
         size = int(obj['SZ'])
         
+        if size < 2 or size > 25:
+            raise ValueError(f'Board size must be between 2 and 25; was {size}')
+        
         solution = obj['SOL']
         next_player = solution[0][0].lower()
+        
+        if next_player not in ('b', 'w'):
+            raise ValueError(f"Next player must be 'b' or 'w', was '{next_player}'")
         
         # Construct initial board position given stone positions
         board = [['.'] * size for _ in range(size)]
@@ -53,7 +59,11 @@ def _add_stones(board, positions, colour):
         board[row][col] = colour
 
 def from_sgf_coords(coords: str):
+    if len(coords) != 2 or not coords.isalpha() or not coords.isascii():
+        raise ValueError(f'SGF coordinates must be two characters [a-z]; was "{coords}"')
+    
     coords = coords.upper()
+    
     # 65 is 'A'
     col = ord(coords[0]) - 65
     row = ord(coords[1]) - 65
@@ -62,6 +72,8 @@ def from_sgf_coords(coords: str):
 # No 'I' column, by convention
 ALPHABET = 'ABCDEFGHJKLMNOPQRSTUVWXYZ'
 def to_letter_number_coords(row: int, col: int):
+    if row < 0 or row >= 25 or col < 0 or col >= 25:
+        raise ValueError(f'row or column index out of bounds; was row = {row}, col = {col}')
     return f'{ALPHABET[col]}{row + 1}'
 
 COLOUR_SWAP = {'b': 'w', 'w': 'b'}
