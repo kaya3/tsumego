@@ -62,10 +62,11 @@ impl MaybeAuth {
             return Ok((Self::Unauthenticated, AuthTokenAction::DoNothing));
         };
         
+        // For some reason, SQLx thinks this is nullable
         let days_left = session.days_left.expect("session expiry should be non-null");
         
+        // Check whether to revoke an expired session
         if days_left <= 0.0 {
-            // Session is expired
             Session::revoke_by_id(state, session.id).await?;
             return Ok((Self::Unauthenticated, AuthTokenAction::Revoke));
         }

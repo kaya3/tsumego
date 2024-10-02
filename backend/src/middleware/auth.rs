@@ -1,13 +1,27 @@
-use actix_web::{body::MessageBody, cookie::{time::Duration, Cookie, SameSite}, dev::{ServiceRequest, ServiceResponse}, http::header::{HeaderName, HeaderValue}, middleware, Error, FromRequest, HttpMessage};
+use actix_web::{
+    body::MessageBody,
+    cookie::{time::Duration, Cookie, SameSite},
+    dev::{Payload, ServiceRequest, ServiceResponse},
+    http::header::{HeaderName, HeaderValue},
+    middleware::Next,
+    Error,
+    FromRequest,
+    HttpMessage,
+    HttpRequest,
+};
 
-use crate::{result::{AppError, Result}, state::State};
-use super::{AuthTokenAction, MaybeAuth};
+use crate::{
+    auth::{AuthTokenAction, MaybeAuth},
+    result::{AppError, Result},
+    state::State,
+};
 
 pub async fn auth_middleware(
     request: ServiceRequest,
-    next: middleware::Next<impl MessageBody>,
+    next: Next<impl MessageBody>,
 ) -> Result<ServiceResponse<impl MessageBody>, Error> {
-    let state: State = request.app_data::<State>()
+    let state: State = request
+        .app_data::<State>()
         .expect("State should be available from app data")
         .clone();
     
@@ -54,20 +68,20 @@ pub async fn auth_middleware(
             cookie.set_max_age(Duration::days(state.cfg.session_duration_days));
             
             response.response_mut().add_cookie(&cookie)?;
-        },
+        }
         AuthTokenAction::Revoke => {
             // Revoke cookie by setting new empty cookie of the same name
             let cookie = Cookie::new(state.cfg.session_token_cookie_name.clone(), "");
             response.response_mut().add_removal_cookie(&cookie)?;
-        },
-        AuthTokenAction::DoNothing => {},
+        }
+        AuthTokenAction::DoNothing => {}
     }
     
     Ok(response)
 }
 
 impl MaybeAuth {
-    fn get_from_request(request: &actix_web::HttpRequest) -> MaybeAuth {
+    fn get_from_request(request: &HttpRequest) -> MaybeAuth {
         request.extensions()
             .get::<MaybeAuth>()
             .cloned()
@@ -79,7 +93,10 @@ impl FromRequest for MaybeAuth {
     type Error = AppError;
     type Future = std::future::Ready<Result<Self>>;
     
-    fn from_request(request: &actix_web::HttpRequest, payload: &mut actix_web::dev::Payload) -> Self::Future {
+    fn from_request(
+        request: &HttpRequest,
+        payload: &mut Payload,
+    ) -> Self::Future {
         let user = MaybeAuth::get_from_request(request);
         std::future::ready(Ok(user))
     }

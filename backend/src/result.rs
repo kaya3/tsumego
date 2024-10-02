@@ -6,6 +6,7 @@ pub type Result<T, E = AppError> = std::result::Result<T, E>;
 pub enum AppError {
     NotFound,
     Unauthorised,
+    BadRequest,
     Hasher(password_hash::Error),
     Io(std::io::Error),
     Sql(sqlx::Error),
@@ -26,6 +27,7 @@ impl ResponseError for AppError {
         match self {
             AppError::NotFound => StatusCode::NOT_FOUND,
             AppError::Unauthorised => StatusCode::UNAUTHORIZED,
+            AppError::BadRequest => StatusCode::BAD_REQUEST,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
