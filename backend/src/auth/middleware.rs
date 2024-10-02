@@ -1,46 +1,86 @@
-use actix_web::{body::MessageBody, dev::{ServiceRequest, ServiceResponse}, middleware, Error, FromRequest, HttpMessage};
+use actix_web::{body::MessageBody, cookie::{time::Duration, Cookie, SameSite}, dev::{ServiceRequest, ServiceResponse}, http::header::{HeaderName, HeaderValue}, middleware, Error, FromRequest, HttpMessage};
 
 use crate::{result::{AppError, Result}, state::State};
-
-use super::MaybeAuth;
+use super::{AuthTokenAction, MaybeAuth};
 
 pub async fn auth_middleware(
-    req: ServiceRequest,
+    request: ServiceRequest,
     next: middleware::Next<impl MessageBody>,
 ) -> Result<ServiceResponse<impl MessageBody>, Error> {
-    let state: State = req.app_data::<State>().unwrap().clone();
+    let state: State = request.app_data::<State>()
+        .expect("State should be available from app data")
+        .clone();
     
-    let auth = match req.cookie(&state.cfg.session_token_cookie_name) {
-        Some(cookie) => MaybeAuth::get_by_session_token(&state, cookie.value()).await?,
-        None => MaybeAuth::Unauthenticated,
+    // Authenticate by the cookie, if there is one
+    let (auth, token_action) = match request.cookie(&state.cfg.session_token_cookie_name) {
+        Some(cookie) => MaybeAuth::authenticate_by_session_token(&state, cookie.value()).await?,
+        None => (MaybeAuth::Unauthenticated, AuthTokenAction::DoNothing),
     };
     
-    if let MaybeAuth::Authenticated(ref u) = auth {
+    // Debug information
+    if let Some(u) = auth.clone().user() {
         log::info!("Request made by user #{:?}", u.id);
     } else {
         log::info!("Request not made by any user");
     }
     
-    req.extensions_mut().insert::<MaybeAuth>(auth);
+    auth.insert_into_request(&request);
     
-    let mut response = next.call(req).await?;
-    // TODO: update cookie according to result
+    // Call the wrapped handler
+    let mut response = next.call(request).await?;
+    
+    // Tell the client not to cache the session token
+    // https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#web-content-caching
+    response.headers_mut().append(
+        HeaderName::from_static("cache-control"),
+        HeaderValue::from_static("no-cache=\"Set-Cookie, Set-Cookie2\""),
+    );
+    
+    // Issue or revoke the cookie, if necessary. If an action is inserted into
+    // the request object, perform that action; otherwise perform the action
+    // indicated by the earlier call to `authenticate_by_session_token`.
+    match AuthTokenAction::take_from_request(response.request(), token_action) {
+        AuthTokenAction::Issue(token) => {
+            // Issue a cookie with the appropriate attributes
+            // https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#cookies
+            let mut cookie = Cookie::new(state.cfg.session_token_cookie_name.clone(), token);
+            
+            // HTTP-only means the cookie is not visible to client-side JavaScript
+            cookie.set_http_only(true);
+            // Only send this cookie over HTTPS connections
+            cookie.set_secure(true);
+            // The client should only send this cookie when making requests from the same site
+            cookie.set_same_site(SameSite::Strict);
+            cookie.set_max_age(Duration::days(state.cfg.session_duration_days));
+            
+            response.response_mut().add_cookie(&cookie)?;
+        },
+        AuthTokenAction::Revoke => {
+            // Revoke cookie by setting new empty cookie of the same name
+            let cookie = Cookie::new(state.cfg.session_token_cookie_name.clone(), "");
+            response.response_mut().add_removal_cookie(&cookie)?;
+        },
+        AuthTokenAction::DoNothing => {},
+    }
+    
     Ok(response)
 }
 
-fn maybe_user_from_req(req: &actix_web::HttpRequest) -> MaybeAuth {
-    req.extensions()
-        .get::<MaybeAuth>()
-        .cloned()
-        .unwrap_or(MaybeAuth::Unauthenticated)
+impl MaybeAuth {
+    fn get_from_request(request: &actix_web::HttpRequest) -> MaybeAuth {
+        request.extensions()
+            .get::<MaybeAuth>()
+            .cloned()
+            .unwrap_or(MaybeAuth::Unauthenticated)
+    }
 }
 
 impl FromRequest for MaybeAuth {
     type Error = AppError;
     type Future = std::future::Ready<Result<Self>>;
     
-    fn from_request(req: &actix_web::HttpRequest, payload: &mut actix_web::dev::Payload) -> Self::Future {
-        let u = maybe_user_from_req(req);
-        std::future::ready(Ok(u))
+    fn from_request(request: &actix_web::HttpRequest, payload: &mut actix_web::dev::Payload) -> Self::Future {
+        let user = MaybeAuth::get_from_request(request);
+        std::future::ready(Ok(user))
     }
 }

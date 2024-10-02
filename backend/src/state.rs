@@ -22,8 +22,8 @@ pub struct Config {
     pub database_pool_size: u32,
     
     pub session_token_cookie_name: CowStr,
-    pub session_duration_days: u32,
-    pub session_renew_after_days: u32,
+    pub session_duration_days: i64,
+    pub session_renew_after_days: i64,
 }
 
 /// Loads the initial application state from the environment variables
