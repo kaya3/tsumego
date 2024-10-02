@@ -1,1 +1,3 @@
-pub mod tsumego;
+mod tsumego;
+
+pub use tsumego::Tsumego;

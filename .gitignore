@@ -1,14 +1,21 @@
+# Third-party repository containing data for about 15,000 tsumego
 sanderland-tsumego/
 
+# Python
 *.pyc
 __pycache__
 
+# Rust
 Cargo.lock
+
+# Backend config and database
 .env
 *.db
 *.db-wal
 *.db-shm
 
+# Build
 frontend/out/
 backend/target/
+backend/static/
 problems/*.sql
