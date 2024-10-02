@@ -1,0 +1,1995 @@
+#![feature(prelude_import)]
+#[prelude_import]
+use std::prelude::rust_2021::*;
+#[macro_use]
+extern crate std;
+use actix_web::{
+    middleware::{self, Logger},
+    App, HttpServer,
+};
+mod auth {
+    mod hashing {
+        use argon2::Argon2;
+        use password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
+        use crate::result::Result;
+        /// Checks a password against a stored password hash, returning `true` if the
+        /// password is correct and `false` otherwise.
+        ///
+        /// Returns an error if the stored hash is invalid.
+        pub fn check_password(stored_hash: &str, given_password: &str) -> Result<bool> {
+            let hash = PasswordHash::new(stored_hash)?;
+            let algs: &[&dyn PasswordVerifier] = &[&Argon2::default()];
+            match hash.verify_password(algs, given_password) {
+                Ok(()) => Ok(true),
+                Err(password_hash::Error::Password) => Ok(false),
+                Err(err) => Err(err.into()),
+            }
+        }
+        /// Computes a password hash for the given password, which can be stored in the
+        /// database. A strong password hashing algorithm with a salt is used.
+        ///
+        /// This function cannot be used to compare a password against a stored hash;
+        /// instead, use the `check_password` function.
+        pub fn generate_password_hash(new_password: &str) -> Result<String> {
+            let salt = SaltString::generate(rand::thread_rng());
+            let hash = Argon2::default()
+                .hash_password(new_password.as_bytes(), &salt)?
+                .to_string();
+            Ok(hash)
+        }
+        /// The number of bytes of entropy in a session token. There is not much point
+        /// in this being larger than 16; OWASP recommends at least 8 bytes of entropy.
+        /// https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#session-id-entropy
+        ///
+        /// We round up to the next multiple of three, since the token is encoded in
+        /// base64, so each three unencoded bytes become four encoded bytes. If the
+        /// number of bytes is not a multiple of 3, the encoded token will end with `=`
+        /// characters which add no entropy.
+        pub const SESSION_TOKEN_BYTES: usize = 18;
+        /// Generates a new random session token, and its hash. The hash should be
+        /// stored in the database, and the raw token should be issued to the client as
+        /// a cookie.
+        ///
+        /// Returns `(token, hash)`.
+        pub fn generate_session_token() -> (String, String) {
+            use rand::{Rng, thread_rng};
+            let mut bytes = [0u8; SESSION_TOKEN_BYTES];
+            thread_rng().fill(&mut bytes);
+            let raw = base64_encode(&bytes);
+            let hash = token_hash(raw.as_str());
+            (raw, hash)
+        }
+        /// Computes a fast hash of a session token.
+        ///
+        /// A fast hash is used because session tokens are authenticated on every
+        /// request; using a fast hash rather than a slow password hash is OK, because
+        /// session tokens are randomly generated rather than chosen by the user, and
+        /// revoked soon enough that they cannot be feasibly brute-forced.
+        ///
+        /// The hash is cryptographically secure, but not suitable for passwords. This
+        /// function should be used to hash session tokens from client cookies, in
+        /// order to authenticate already-logged-in users.
+        pub fn token_hash(s: &str) -> String {
+            use sha2::{Sha256, Digest};
+            let mut hasher = Sha256::new();
+            hasher.update(s);
+            base64_encode(&hasher.finalize())
+        }
+        fn base64_encode(bytes: &[u8]) -> String {
+            use base64::{engine::general_purpose::STANDARD, Engine};
+            STANDARD.encode(bytes)
+        }
+    }
+    mod middleware {
+        use actix_web::{
+            body::MessageBody, dev::{ServiceRequest, ServiceResponse},
+            middleware, Error, HttpMessage,
+        };
+        use crate::{
+            model::{Session, User},
+            result::Result, state::State,
+        };
+        pub async fn auth_middleware(
+            req: ServiceRequest,
+            next: middleware::Next<impl MessageBody>,
+        ) -> Result<ServiceResponse<impl MessageBody>, Error> {
+            let state: State = req.app_data::<State>().unwrap().clone();
+            let user = match req.cookie(&state.cfg.session_token_cookie_name) {
+                Some(cookie) => Session::get_user_by_token(&state, cookie.value()).await?,
+                None => None,
+            };
+            if let Some(ref u) = user {
+                {
+                    let lvl = ::log::Level::Info;
+                    if lvl <= ::log::STATIC_MAX_LEVEL && lvl <= ::log::max_level() {
+                        ::log::__private_api::log(
+                            format_args!("Request made by user #{0:?}", u.id),
+                            lvl,
+                            &(
+                                "backend::auth::middleware",
+                                "backend::auth::middleware",
+                                ::log::__private_api::loc(),
+                            ),
+                            (),
+                        );
+                    }
+                };
+            } else {
+                {
+                    let lvl = ::log::Level::Info;
+                    if lvl <= ::log::STATIC_MAX_LEVEL && lvl <= ::log::max_level() {
+                        ::log::__private_api::log(
+                            format_args!("Request not made by any user"),
+                            lvl,
+                            &(
+                                "backend::auth::middleware",
+                                "backend::auth::middleware",
+                                ::log::__private_api::loc(),
+                            ),
+                            (),
+                        );
+                    }
+                };
+            }
+            req.extensions_mut().insert(user);
+            next.call(req).await
+        }
+        async fn load_user_from_req(
+            state: &State,
+            req: &ServiceRequest,
+        ) -> Result<Option<User>> {
+            let Some(cookie) = req.cookie(&state.cfg.session_token_cookie_name) else {
+                return Ok(None);
+            };
+            Session::get_user_by_token(&state, cookie.value()).await
+        }
+    }
+    pub use hashing::{
+        check_password, generate_password_hash, token_hash, generate_session_token,
+        SESSION_TOKEN_BYTES,
+    };
+    pub use middleware::auth_middleware;
+}
+mod model {
+    mod tsumego {
+        use sqlx::types::JsonValue;
+        use crate::result::Result;
+        use crate::state::State;
+        /// Data for a tsumego. The board and variation tree are sent to the client,
+        /// and not otherwise used in the backend.
+        pub struct Tsumego {
+            pub id: i64,
+            pub name: String,
+            pub board: String,
+            pub tree: JsonValue,
+        }
+        #[doc(hidden)]
+        #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+        const _: () = {
+            #[allow(unused_extern_crates, clippy::useless_attribute)]
+            extern crate serde as _serde;
+            #[automatically_derived]
+            impl _serde::Serialize for Tsumego {
+                fn serialize<__S>(
+                    &self,
+                    __serializer: __S,
+                ) -> _serde::__private::Result<__S::Ok, __S::Error>
+                where
+                    __S: _serde::Serializer,
+                {
+                    let mut __serde_state = _serde::Serializer::serialize_struct(
+                        __serializer,
+                        "Tsumego",
+                        false as usize + 1 + 1 + 1 + 1,
+                    )?;
+                    _serde::ser::SerializeStruct::serialize_field(
+                        &mut __serde_state,
+                        "id",
+                        &self.id,
+                    )?;
+                    _serde::ser::SerializeStruct::serialize_field(
+                        &mut __serde_state,
+                        "name",
+                        &self.name,
+                    )?;
+                    _serde::ser::SerializeStruct::serialize_field(
+                        &mut __serde_state,
+                        "board",
+                        &self.board,
+                    )?;
+                    _serde::ser::SerializeStruct::serialize_field(
+                        &mut __serde_state,
+                        "tree",
+                        &self.tree,
+                    )?;
+                    _serde::ser::SerializeStruct::end(__serde_state)
+                }
+            }
+        };
+        #[automatically_derived]
+        impl<'a, R: ::sqlx::Row> ::sqlx::FromRow<'a, R> for Tsumego
+        where
+            &'a ::std::primitive::str: ::sqlx::ColumnIndex<R>,
+            i64: ::sqlx::decode::Decode<'a, R::Database>,
+            i64: ::sqlx::types::Type<R::Database>,
+            String: ::sqlx::decode::Decode<'a, R::Database>,
+            String: ::sqlx::types::Type<R::Database>,
+            String: ::sqlx::decode::Decode<'a, R::Database>,
+            String: ::sqlx::types::Type<R::Database>,
+            JsonValue: ::sqlx::decode::Decode<'a, R::Database>,
+            JsonValue: ::sqlx::types::Type<R::Database>,
+        {
+            fn from_row(__row: &'a R) -> ::sqlx::Result<Self> {
+                let id: i64 = __row.try_get("id")?;
+                let name: String = __row.try_get("name")?;
+                let board: String = __row.try_get("board")?;
+                let tree: JsonValue = __row.try_get("tree")?;
+                ::std::result::Result::Ok(Tsumego { id, name, board, tree })
+            }
+        }
+        impl Tsumego {
+            /// Fetches a Tsumego from the database by its id, returning an error if
+            /// the id is not found.
+            pub async fn require_by_id(state: &State, id: i64) -> Result<Self> {
+                Self::get_by_id(state, id)
+                    .await?
+                    .map_or(Err(sqlx::Error::RowNotFound.into()), Ok)
+            }
+            /// Fetches a Tsumego from the database by its id, returning `None` if the
+            /// id is not found.
+            pub async fn get_by_id(state: &State, id: i64) -> Result<Option<Self>> {
+                let tsumego = {
+                    {
+                        #[allow(clippy::all)]
+                        {
+                            use ::sqlx::Arguments as _;
+                            let arg0 = &(id);
+                            let mut query_args = <sqlx::sqlite::Sqlite as ::sqlx::database::Database>::Arguments::<
+                                '_,
+                            >::default();
+                            query_args
+                                .reserve(
+                                    1usize,
+                                    0
+                                        + ::sqlx::encode::Encode::<
+                                            sqlx::sqlite::Sqlite,
+                                        >::size_hint(arg0),
+                                );
+                            let query_args = ::core::result::Result::<
+                                _,
+                                ::sqlx::error::BoxDynError,
+                            >::Ok(query_args)
+                                .and_then(move |mut query_args| {
+                                    query_args.add(arg0).map(move |()| query_args)
+                                });
+                            ::sqlx::__query_with_result::<
+                                sqlx::sqlite::Sqlite,
+                                _,
+                            >(
+                                    "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego WHERE id = ?",
+                                    query_args,
+                                )
+                                .try_map(|row: sqlx::sqlite::SqliteRow| {
+                                    use ::sqlx::Row as _;
+                                    #[allow(non_snake_case)]
+                                    let sqlx_query_as_id = row
+                                        .try_get_unchecked::<i64, _>(0usize)?
+                                        .into();
+                                    #[allow(non_snake_case)]
+                                    let sqlx_query_as_name = row
+                                        .try_get_unchecked::<String, _>(1usize)?
+                                        .into();
+                                    #[allow(non_snake_case)]
+                                    let sqlx_query_as_board = row
+                                        .try_get_unchecked::<String, _>(2usize)?
+                                        .into();
+                                    #[allow(non_snake_case)]
+                                    let sqlx_query_as_tree = row
+                                        .try_get_unchecked::<JsonValue, _>(3usize)?
+                                        .into();
+                                    ::std::result::Result::Ok(Self {
+                                        id: sqlx_query_as_id,
+                                        name: sqlx_query_as_name,
+                                        board: sqlx_query_as_board,
+                                        tree: sqlx_query_as_tree,
+                                    })
+                                })
+                        }
+                    }
+                }
+                    .fetch_optional(&state.db)
+                    .await?;
+                {
+                    let lvl = ::log::Level::Info;
+                    if lvl <= ::log::STATIC_MAX_LEVEL && lvl <= ::log::max_level() {
+                        ::log::__private_api::log(
+                            format_args!(
+                                "Tsumego tree: {0:?}",
+                                tsumego.as_ref().map(|t| t.tree.clone()),
+                            ),
+                            lvl,
+                            &(
+                                "backend::model::tsumego",
+                                "backend::model::tsumego",
+                                ::log::__private_api::loc(),
+                            ),
+                            (),
+                        );
+                    }
+                };
+                Ok(tsumego)
+            }
+            /// Fetches a Tsumego from the database by its name, returning `None` if
+            /// the name is not found.
+            pub async fn get_by_name(state: &State, name: &str) -> Result<Option<Self>> {
+                Ok(
+                    {
+                        {
+                            #[allow(clippy::all)]
+                            {
+                                use ::sqlx::Arguments as _;
+                                let arg0 = &(name);
+                                let mut query_args = <sqlx::sqlite::Sqlite as ::sqlx::database::Database>::Arguments::<
+                                    '_,
+                                >::default();
+                                query_args
+                                    .reserve(
+                                        1usize,
+                                        0
+                                            + ::sqlx::encode::Encode::<
+                                                sqlx::sqlite::Sqlite,
+                                            >::size_hint(arg0),
+                                    );
+                                let query_args = ::core::result::Result::<
+                                    _,
+                                    ::sqlx::error::BoxDynError,
+                                >::Ok(query_args)
+                                    .and_then(move |mut query_args| {
+                                        query_args.add(arg0).map(move |()| query_args)
+                                    });
+                                ::sqlx::__query_with_result::<
+                                    sqlx::sqlite::Sqlite,
+                                    _,
+                                >(
+                                        "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego WHERE name = ? LIMIT 1",
+                                        query_args,
+                                    )
+                                    .try_map(|row: sqlx::sqlite::SqliteRow| {
+                                        use ::sqlx::Row as _;
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_id = row
+                                            .try_get_unchecked::<i64, _>(0usize)?
+                                            .into();
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_name = row
+                                            .try_get_unchecked::<String, _>(1usize)?
+                                            .into();
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_board = row
+                                            .try_get_unchecked::<String, _>(2usize)?
+                                            .into();
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_tree = row
+                                            .try_get_unchecked::<JsonValue, _>(3usize)?
+                                            .into();
+                                        ::std::result::Result::Ok(Self {
+                                            id: sqlx_query_as_id,
+                                            name: sqlx_query_as_name,
+                                            board: sqlx_query_as_board,
+                                            tree: sqlx_query_as_tree,
+                                        })
+                                    })
+                            }
+                        }
+                    }
+                        .fetch_optional(&state.db)
+                        .await?,
+                )
+            }
+            /// Fetches a vector of all Tsumego instances from the database.
+            pub async fn get_all(state: &State) -> Result<Vec<Tsumego>> {
+                Ok(
+                    {
+                        {
+                            #[allow(clippy::all)]
+                            {
+                                use ::sqlx::Arguments as _;
+                                let query_args = ::core::result::Result::<
+                                    _,
+                                    ::sqlx::error::BoxDynError,
+                                >::Ok(
+                                    <sqlx::sqlite::Sqlite as ::sqlx::database::Database>::Arguments::<
+                                        '_,
+                                    >::default(),
+                                );
+                                ::sqlx::__query_with_result::<
+                                    sqlx::sqlite::Sqlite,
+                                    _,
+                                >(
+                                        "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego",
+                                        query_args,
+                                    )
+                                    .try_map(|row: sqlx::sqlite::SqliteRow| {
+                                        use ::sqlx::Row as _;
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_id = row
+                                            .try_get_unchecked::<i64, _>(0usize)?
+                                            .into();
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_name = row
+                                            .try_get_unchecked::<String, _>(1usize)?
+                                            .into();
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_board = row
+                                            .try_get_unchecked::<String, _>(2usize)?
+                                            .into();
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_tree = row
+                                            .try_get_unchecked::<JsonValue, _>(3usize)?
+                                            .into();
+                                        ::std::result::Result::Ok(Self {
+                                            id: sqlx_query_as_id,
+                                            name: sqlx_query_as_name,
+                                            board: sqlx_query_as_board,
+                                            tree: sqlx_query_as_tree,
+                                        })
+                                    })
+                            }
+                        }
+                    }
+                        .fetch_all(&state.db)
+                        .await?,
+                )
+            }
+        }
+    }
+    mod user {
+        use crate::{auth, result::Result, state::State};
+        pub struct User {
+            pub id: i64,
+            pub email: String,
+            pub display_name: String,
+            pub is_admin: bool,
+        }
+        #[automatically_derived]
+        impl<'a, R: ::sqlx::Row> ::sqlx::FromRow<'a, R> for User
+        where
+            &'a ::std::primitive::str: ::sqlx::ColumnIndex<R>,
+            i64: ::sqlx::decode::Decode<'a, R::Database>,
+            i64: ::sqlx::types::Type<R::Database>,
+            String: ::sqlx::decode::Decode<'a, R::Database>,
+            String: ::sqlx::types::Type<R::Database>,
+            String: ::sqlx::decode::Decode<'a, R::Database>,
+            String: ::sqlx::types::Type<R::Database>,
+            bool: ::sqlx::decode::Decode<'a, R::Database>,
+            bool: ::sqlx::types::Type<R::Database>,
+        {
+            fn from_row(__row: &'a R) -> ::sqlx::Result<Self> {
+                let id: i64 = __row.try_get("id")?;
+                let email: String = __row.try_get("email")?;
+                let display_name: String = __row.try_get("display_name")?;
+                let is_admin: bool = __row.try_get("is_admin")?;
+                ::std::result::Result::Ok(User {
+                    id,
+                    email,
+                    display_name,
+                    is_admin,
+                })
+            }
+        }
+        impl User {
+            pub async fn require_by_id(state: &State, id: i64) -> Result<Self> {
+                Self::get_by_id(state, id)
+                    .await?
+                    .map_or(Err(sqlx::Error::RowNotFound.into()), Ok)
+            }
+            pub async fn get_by_id(state: &State, id: i64) -> Result<Option<Self>> {
+                Ok(
+                    {
+                        {
+                            #[allow(clippy::all)]
+                            {
+                                use ::sqlx::Arguments as _;
+                                let arg0 = &(id);
+                                let mut query_args = <sqlx::sqlite::Sqlite as ::sqlx::database::Database>::Arguments::<
+                                    '_,
+                                >::default();
+                                query_args
+                                    .reserve(
+                                        1usize,
+                                        0
+                                            + ::sqlx::encode::Encode::<
+                                                sqlx::sqlite::Sqlite,
+                                            >::size_hint(arg0),
+                                    );
+                                let query_args = ::core::result::Result::<
+                                    _,
+                                    ::sqlx::error::BoxDynError,
+                                >::Ok(query_args)
+                                    .and_then(move |mut query_args| {
+                                        query_args.add(arg0).map(move |()| query_args)
+                                    });
+                                ::sqlx::__query_with_result::<
+                                    sqlx::sqlite::Sqlite,
+                                    _,
+                                >(
+                                        "SELECT id, email, display_name, is_admin FROM users WHERE id = ?",
+                                        query_args,
+                                    )
+                                    .try_map(|row: sqlx::sqlite::SqliteRow| {
+                                        use ::sqlx::Row as _;
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_id = row
+                                            .try_get_unchecked::<i64, _>(0usize)?
+                                            .into();
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_email = row
+                                            .try_get_unchecked::<String, _>(1usize)?
+                                            .into();
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_display_name = row
+                                            .try_get_unchecked::<String, _>(2usize)?
+                                            .into();
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_is_admin = row
+                                            .try_get_unchecked::<bool, _>(3usize)?
+                                            .into();
+                                        ::std::result::Result::Ok(Self {
+                                            id: sqlx_query_as_id,
+                                            email: sqlx_query_as_email,
+                                            display_name: sqlx_query_as_display_name,
+                                            is_admin: sqlx_query_as_is_admin,
+                                        })
+                                    })
+                            }
+                        }
+                    }
+                        .fetch_optional(&state.db)
+                        .await?,
+                )
+            }
+            pub async fn get_by_email(
+                state: &State,
+                email: &str,
+            ) -> Result<Option<Self>> {
+                Ok(
+                    {
+                        {
+                            #[allow(clippy::all)]
+                            {
+                                use ::sqlx::Arguments as _;
+                                let arg0 = &(email);
+                                let mut query_args = <sqlx::sqlite::Sqlite as ::sqlx::database::Database>::Arguments::<
+                                    '_,
+                                >::default();
+                                query_args
+                                    .reserve(
+                                        1usize,
+                                        0
+                                            + ::sqlx::encode::Encode::<
+                                                sqlx::sqlite::Sqlite,
+                                            >::size_hint(arg0),
+                                    );
+                                let query_args = ::core::result::Result::<
+                                    _,
+                                    ::sqlx::error::BoxDynError,
+                                >::Ok(query_args)
+                                    .and_then(move |mut query_args| {
+                                        query_args.add(arg0).map(move |()| query_args)
+                                    });
+                                ::sqlx::__query_with_result::<
+                                    sqlx::sqlite::Sqlite,
+                                    _,
+                                >(
+                                        "SELECT id, email, display_name, is_admin FROM users WHERE email = ? LIMIT 1",
+                                        query_args,
+                                    )
+                                    .try_map(|row: sqlx::sqlite::SqliteRow| {
+                                        use ::sqlx::Row as _;
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_id = row
+                                            .try_get_unchecked::<i64, _>(0usize)?
+                                            .into();
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_email = row
+                                            .try_get_unchecked::<String, _>(1usize)?
+                                            .into();
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_display_name = row
+                                            .try_get_unchecked::<String, _>(2usize)?
+                                            .into();
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_is_admin = row
+                                            .try_get_unchecked::<bool, _>(3usize)?
+                                            .into();
+                                        ::std::result::Result::Ok(Self {
+                                            id: sqlx_query_as_id,
+                                            email: sqlx_query_as_email,
+                                            display_name: sqlx_query_as_display_name,
+                                            is_admin: sqlx_query_as_is_admin,
+                                        })
+                                    })
+                            }
+                        }
+                    }
+                        .fetch_optional(&state.db)
+                        .await?,
+                )
+            }
+            pub async fn get_all(state: &State) -> Result<Vec<Self>> {
+                Ok(
+                    {
+                        {
+                            #[allow(clippy::all)]
+                            {
+                                use ::sqlx::Arguments as _;
+                                let query_args = ::core::result::Result::<
+                                    _,
+                                    ::sqlx::error::BoxDynError,
+                                >::Ok(
+                                    <sqlx::sqlite::Sqlite as ::sqlx::database::Database>::Arguments::<
+                                        '_,
+                                    >::default(),
+                                );
+                                ::sqlx::__query_with_result::<
+                                    sqlx::sqlite::Sqlite,
+                                    _,
+                                >(
+                                        "SELECT id, email, display_name, is_admin FROM users ORDER by id",
+                                        query_args,
+                                    )
+                                    .try_map(|row: sqlx::sqlite::SqliteRow| {
+                                        use ::sqlx::Row as _;
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_id = row
+                                            .try_get_unchecked::<i64, _>(0usize)?
+                                            .into();
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_email = row
+                                            .try_get_unchecked::<String, _>(1usize)?
+                                            .into();
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_display_name = row
+                                            .try_get_unchecked::<String, _>(2usize)?
+                                            .into();
+                                        #[allow(non_snake_case)]
+                                        let sqlx_query_as_is_admin = row
+                                            .try_get_unchecked::<bool, _>(3usize)?
+                                            .into();
+                                        ::std::result::Result::Ok(Self {
+                                            id: sqlx_query_as_id,
+                                            email: sqlx_query_as_email,
+                                            display_name: sqlx_query_as_display_name,
+                                            is_admin: sqlx_query_as_is_admin,
+                                        })
+                                    })
+                            }
+                        }
+                    }
+                        .fetch_all(&state.db)
+                        .await?,
+                )
+            }
+            pub async fn check_password(
+                &self,
+                state: &State,
+                given_password: &str,
+            ) -> Result<bool> {
+                let password_hash = {
+                    #[allow(clippy::all)]
+                    {
+                        use ::sqlx::Arguments as _;
+                        let arg0 = &(self.id);
+                        let mut query_args = <sqlx::sqlite::Sqlite as ::sqlx::database::Database>::Arguments::<
+                            '_,
+                        >::default();
+                        query_args
+                            .reserve(
+                                1usize,
+                                0
+                                    + ::sqlx::encode::Encode::<
+                                        sqlx::sqlite::Sqlite,
+                                    >::size_hint(arg0),
+                            );
+                        let query_args = ::core::result::Result::<
+                            _,
+                            ::sqlx::error::BoxDynError,
+                        >::Ok(query_args)
+                            .and_then(move |mut query_args| {
+                                query_args.add(arg0).map(move |()| query_args)
+                            });
+                        ::sqlx::__query_scalar_with_result::<
+                            sqlx::sqlite::Sqlite,
+                            String,
+                            _,
+                        >("SELECT password_hash FROM users WHERE id = ?", query_args)
+                    }
+                }
+                    .fetch_one(&state.db)
+                    .await?;
+                auth::check_password(password_hash.as_str(), given_password)
+            }
+        }
+    }
+    mod session {
+        use crate::{auth, model::User, result::Result, state::State};
+        pub struct Session {
+            pub id: i64,
+            pub user_id: i64,
+            pub expires: chrono::NaiveDateTime,
+        }
+        #[automatically_derived]
+        impl<'a, R: ::sqlx::Row> ::sqlx::FromRow<'a, R> for Session
+        where
+            &'a ::std::primitive::str: ::sqlx::ColumnIndex<R>,
+            i64: ::sqlx::decode::Decode<'a, R::Database>,
+            i64: ::sqlx::types::Type<R::Database>,
+            i64: ::sqlx::decode::Decode<'a, R::Database>,
+            i64: ::sqlx::types::Type<R::Database>,
+            chrono::NaiveDateTime: ::sqlx::decode::Decode<'a, R::Database>,
+            chrono::NaiveDateTime: ::sqlx::types::Type<R::Database>,
+        {
+            fn from_row(__row: &'a R) -> ::sqlx::Result<Self> {
+                let id: i64 = __row.try_get("id")?;
+                let user_id: i64 = __row.try_get("user_id")?;
+                let expires: chrono::NaiveDateTime = __row.try_get("expires")?;
+                ::std::result::Result::Ok(Session { id, user_id, expires })
+            }
+        }
+        impl Session {
+            pub async fn get_user_by_token(
+                state: &State,
+                token: &str,
+            ) -> Result<Option<User>> {
+                struct SessionRecord {
+                    id: i64,
+                    user_id: i64,
+                    days_left: Option<f64>,
+                }
+                #[automatically_derived]
+                impl<'a, R: ::sqlx::Row> ::sqlx::FromRow<'a, R> for SessionRecord
+                where
+                    &'a ::std::primitive::str: ::sqlx::ColumnIndex<R>,
+                    i64: ::sqlx::decode::Decode<'a, R::Database>,
+                    i64: ::sqlx::types::Type<R::Database>,
+                    i64: ::sqlx::decode::Decode<'a, R::Database>,
+                    i64: ::sqlx::types::Type<R::Database>,
+                    Option<f64>: ::sqlx::decode::Decode<'a, R::Database>,
+                    Option<f64>: ::sqlx::types::Type<R::Database>,
+                {
+                    fn from_row(__row: &'a R) -> ::sqlx::Result<Self> {
+                        let id: i64 = __row.try_get("id")?;
+                        let user_id: i64 = __row.try_get("user_id")?;
+                        let days_left: Option<f64> = __row.try_get("days_left")?;
+                        ::std::result::Result::Ok(SessionRecord {
+                            id,
+                            user_id,
+                            days_left,
+                        })
+                    }
+                }
+                let hash = auth::token_hash(token);
+                let Some(session) = {
+                    {
+                        #[allow(clippy::all)]
+                        {
+                            use ::sqlx::Arguments as _;
+                            let arg0 = &(hash);
+                            let mut query_args = <sqlx::sqlite::Sqlite as ::sqlx::database::Database>::Arguments::<
+                                '_,
+                            >::default();
+                            query_args
+                                .reserve(
+                                    1usize,
+                                    0
+                                        + ::sqlx::encode::Encode::<
+                                            sqlx::sqlite::Sqlite,
+                                        >::size_hint(arg0),
+                                );
+                            let query_args = ::core::result::Result::<
+                                _,
+                                ::sqlx::error::BoxDynError,
+                            >::Ok(query_args)
+                                .and_then(move |mut query_args| {
+                                    query_args.add(arg0).map(move |()| query_args)
+                                });
+                            ::sqlx::__query_with_result::<
+                                sqlx::sqlite::Sqlite,
+                                _,
+                            >(
+                                    "SELECT id, user_id, (julianday(expires) - julianday('now')) AS days_left FROM sessions WHERE token_hash = ? LIMIT 1",
+                                    query_args,
+                                )
+                                .try_map(|row: sqlx::sqlite::SqliteRow| {
+                                    use ::sqlx::Row as _;
+                                    #[allow(non_snake_case)]
+                                    let sqlx_query_as_id = row
+                                        .try_get_unchecked::<i64, _>(0usize)?
+                                        .into();
+                                    #[allow(non_snake_case)]
+                                    let sqlx_query_as_user_id = row
+                                        .try_get_unchecked::<i64, _>(1usize)?
+                                        .into();
+                                    #[allow(non_snake_case)]
+                                    let sqlx_query_as_days_left = row
+                                        .try_get_unchecked::<
+                                            ::std::option::Option<(/*ERROR*/)>,
+                                            _,
+                                        >(2usize)?
+                                        .into();
+                                    ::std::result::Result::Ok(SessionRecord {
+                                        id: sqlx_query_as_id,
+                                        user_id: sqlx_query_as_user_id,
+                                        days_left: sqlx_query_as_days_left,
+                                    })
+                                })
+                        }
+                    }
+                }
+                    .fetch_optional(&state.db)
+                    .await? else {
+                    return Ok(None);
+                };
+                let days_left = session
+                    .days_left
+                    .expect("session expiry should be non-null");
+                if days_left <= 0.0 {
+                    return Ok(None);
+                }
+                let user = User::require_by_id(state, session.user_id).await?;
+                Ok(Some(user))
+            }
+            /// Generates a new session token for the given user, and inserts it into
+            /// the database. This should be called on a successful login.
+            pub async fn new_token_for_user(
+                state: &State,
+                user: &User,
+            ) -> Result<String> {
+                const MAX_RETRIES: usize = 32;
+                let mut retries: usize = 0;
+                let (token, hash) = loop {
+                    let (token, hash) = auth::generate_session_token();
+                    let is_duplicate = {
+                        #[allow(clippy::all)]
+                        {
+                            use ::sqlx::Arguments as _;
+                            let arg0 = &(hash);
+                            let mut query_args = <sqlx::sqlite::Sqlite as ::sqlx::database::Database>::Arguments::<
+                                '_,
+                            >::default();
+                            query_args
+                                .reserve(
+                                    1usize,
+                                    0
+                                        + ::sqlx::encode::Encode::<
+                                            sqlx::sqlite::Sqlite,
+                                        >::size_hint(arg0),
+                                );
+                            let query_args = ::core::result::Result::<
+                                _,
+                                ::sqlx::error::BoxDynError,
+                            >::Ok(query_args)
+                                .and_then(move |mut query_args| {
+                                    query_args.add(arg0).map(move |()| query_args)
+                                });
+                            ::sqlx::__query_scalar_with_result::<
+                                sqlx::sqlite::Sqlite,
+                                i64,
+                                _,
+                            >(
+                                "SELECT COUNT(1) FROM sessions WHERE token_hash = ? LIMIT 1",
+                                query_args,
+                            )
+                        }
+                    }
+                        .fetch_one(&state.db)
+                        .await? > 0;
+                    if !is_duplicate {
+                        break (token, hash);
+                    }
+                    retries += 1;
+                    if retries >= MAX_RETRIES {
+                        {
+                            ::core::panicking::panic_fmt(
+                                format_args!("thread_rng has catastrophically low entropy"),
+                            );
+                        };
+                    }
+                };
+                if retries > 0 {
+                    let unlikeliness = 8 * auth::SESSION_TOKEN_BYTES * retries;
+                    {
+                        let lvl = ::log::Level::Warn;
+                        if lvl <= ::log::STATIC_MAX_LEVEL && lvl <= ::log::max_level() {
+                            ::log::__private_api::log(
+                                format_args!(
+                                    "Session token generated with {0} retry(s); thread_rng probably has low entropy, as otherwise this event has probability 2^-{1}",
+                                    retries,
+                                    unlikeliness,
+                                ),
+                                lvl,
+                                &(
+                                    "backend::model::session",
+                                    "backend::model::session",
+                                    ::log::__private_api::loc(),
+                                ),
+                                (),
+                            );
+                        }
+                    };
+                }
+                {
+                    {
+                        #[allow(clippy::all)]
+                        {
+                            use ::sqlx::Arguments as _;
+                            let arg0 = &(user.id);
+                            let arg1 = &(hash);
+                            let arg2 = &(state.cfg.session_duration_days);
+                            let mut query_args = <sqlx::sqlite::Sqlite as ::sqlx::database::Database>::Arguments::<
+                                '_,
+                            >::default();
+                            query_args
+                                .reserve(
+                                    3usize,
+                                    0
+                                        + ::sqlx::encode::Encode::<
+                                            sqlx::sqlite::Sqlite,
+                                        >::size_hint(arg0)
+                                        + ::sqlx::encode::Encode::<
+                                            sqlx::sqlite::Sqlite,
+                                        >::size_hint(arg1)
+                                        + ::sqlx::encode::Encode::<
+                                            sqlx::sqlite::Sqlite,
+                                        >::size_hint(arg2),
+                                );
+                            let query_args = ::core::result::Result::<
+                                _,
+                                ::sqlx::error::BoxDynError,
+                            >::Ok(query_args)
+                                .and_then(move |mut query_args| {
+                                    query_args.add(arg0).map(move |()| query_args)
+                                })
+                                .and_then(move |mut query_args| {
+                                    query_args.add(arg1).map(move |()| query_args)
+                                })
+                                .and_then(move |mut query_args| {
+                                    query_args.add(arg2).map(move |()| query_args)
+                                });
+                            ::sqlx::__query_with_result::<
+                                sqlx::sqlite::Sqlite,
+                                _,
+                            >(
+                                "INSERT INTO sessions (user_id, token_hash, expires) VALUES (?, ?, datetime('now', '+'||?||' days'))",
+                                query_args,
+                            )
+                        }
+                    }
+                }
+                    .execute(&state.db)
+                    .await?;
+                Ok(token)
+            }
+        }
+    }
+    pub use session::Session;
+    pub use tsumego::Tsumego;
+    pub use user::User;
+}
+mod result {
+    use actix_web::{
+        body::{BoxBody, MessageBody},
+        http::StatusCode, HttpResponse, ResponseError,
+    };
+    pub type Result<T, E = AppError> = std::result::Result<T, E>;
+    pub enum AppError {
+        NotFound,
+        Unauthorised,
+        Hasher(password_hash::Error),
+        Io(std::io::Error),
+        Sql(sqlx::Error),
+    }
+    #[automatically_derived]
+    impl ::core::fmt::Debug for AppError {
+        fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+            match self {
+                AppError::NotFound => ::core::fmt::Formatter::write_str(f, "NotFound"),
+                AppError::Unauthorised => {
+                    ::core::fmt::Formatter::write_str(f, "Unauthorised")
+                }
+                AppError::Hasher(__self_0) => {
+                    ::core::fmt::Formatter::debug_tuple_field1_finish(
+                        f,
+                        "Hasher",
+                        &__self_0,
+                    )
+                }
+                AppError::Io(__self_0) => {
+                    ::core::fmt::Formatter::debug_tuple_field1_finish(f, "Io", &__self_0)
+                }
+                AppError::Sql(__self_0) => {
+                    ::core::fmt::Formatter::debug_tuple_field1_finish(
+                        f,
+                        "Sql",
+                        &__self_0,
+                    )
+                }
+            }
+        }
+    }
+    impl std::fmt::Display for AppError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let reason = self
+                .status_code()
+                .canonical_reason()
+                .unwrap_or("Unknown error");
+            f.write_fmt(format_args!("{0}", reason))
+        }
+    }
+    impl ResponseError for AppError {
+        fn status_code(&self) -> StatusCode {
+            match self {
+                AppError::NotFound => StatusCode::NOT_FOUND,
+                AppError::Unauthorised => StatusCode::UNAUTHORIZED,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            }
+        }
+        fn error_response(&self) -> HttpResponse<BoxBody> {
+            let reason = {
+                let res = ::alloc::fmt::format(format_args!("{0}", self));
+                res
+            };
+            HttpResponse::new(self.status_code()).set_body(MessageBody::boxed(reason))
+        }
+    }
+    impl From<std::io::Error> for AppError {
+        fn from(err: std::io::Error) -> Self {
+            AppError::Io(err)
+        }
+    }
+    impl From<sqlx::Error> for AppError {
+        fn from(err: sqlx::Error) -> Self {
+            AppError::Sql(err)
+        }
+    }
+    impl From<password_hash::Error> for AppError {
+        fn from(err: password_hash::Error) -> Self {
+            AppError::Hasher(err)
+        }
+    }
+}
+mod routes {
+    mod auth {
+        use actix_web::{post, web, HttpResponse, Responder};
+        use crate::{
+            model::{User, Session},
+            result::{AppError, Result},
+            state::State,
+        };
+        /// Declares routes for login/logout and other authentication actions.
+        pub fn declare_routes(conf: &mut web::ServiceConfig) {
+            conf.service(login);
+        }
+        struct LoginForm {
+            email: String,
+            password: String,
+        }
+        #[doc(hidden)]
+        #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+        const _: () = {
+            #[allow(unused_extern_crates, clippy::useless_attribute)]
+            extern crate serde as _serde;
+            #[automatically_derived]
+            impl<'de> _serde::Deserialize<'de> for LoginForm {
+                fn deserialize<__D>(
+                    __deserializer: __D,
+                ) -> _serde::__private::Result<Self, __D::Error>
+                where
+                    __D: _serde::Deserializer<'de>,
+                {
+                    #[allow(non_camel_case_types)]
+                    #[doc(hidden)]
+                    enum __Field {
+                        __field0,
+                        __field1,
+                        __ignore,
+                    }
+                    #[doc(hidden)]
+                    struct __FieldVisitor;
+                    impl<'de> _serde::de::Visitor<'de> for __FieldVisitor {
+                        type Value = __Field;
+                        fn expecting(
+                            &self,
+                            __formatter: &mut _serde::__private::Formatter,
+                        ) -> _serde::__private::fmt::Result {
+                            _serde::__private::Formatter::write_str(
+                                __formatter,
+                                "field identifier",
+                            )
+                        }
+                        fn visit_u64<__E>(
+                            self,
+                            __value: u64,
+                        ) -> _serde::__private::Result<Self::Value, __E>
+                        where
+                            __E: _serde::de::Error,
+                        {
+                            match __value {
+                                0u64 => _serde::__private::Ok(__Field::__field0),
+                                1u64 => _serde::__private::Ok(__Field::__field1),
+                                _ => _serde::__private::Ok(__Field::__ignore),
+                            }
+                        }
+                        fn visit_str<__E>(
+                            self,
+                            __value: &str,
+                        ) -> _serde::__private::Result<Self::Value, __E>
+                        where
+                            __E: _serde::de::Error,
+                        {
+                            match __value {
+                                "email" => _serde::__private::Ok(__Field::__field0),
+                                "password" => _serde::__private::Ok(__Field::__field1),
+                                _ => _serde::__private::Ok(__Field::__ignore),
+                            }
+                        }
+                        fn visit_bytes<__E>(
+                            self,
+                            __value: &[u8],
+                        ) -> _serde::__private::Result<Self::Value, __E>
+                        where
+                            __E: _serde::de::Error,
+                        {
+                            match __value {
+                                b"email" => _serde::__private::Ok(__Field::__field0),
+                                b"password" => _serde::__private::Ok(__Field::__field1),
+                                _ => _serde::__private::Ok(__Field::__ignore),
+                            }
+                        }
+                    }
+                    impl<'de> _serde::Deserialize<'de> for __Field {
+                        #[inline]
+                        fn deserialize<__D>(
+                            __deserializer: __D,
+                        ) -> _serde::__private::Result<Self, __D::Error>
+                        where
+                            __D: _serde::Deserializer<'de>,
+                        {
+                            _serde::Deserializer::deserialize_identifier(
+                                __deserializer,
+                                __FieldVisitor,
+                            )
+                        }
+                    }
+                    #[doc(hidden)]
+                    struct __Visitor<'de> {
+                        marker: _serde::__private::PhantomData<LoginForm>,
+                        lifetime: _serde::__private::PhantomData<&'de ()>,
+                    }
+                    impl<'de> _serde::de::Visitor<'de> for __Visitor<'de> {
+                        type Value = LoginForm;
+                        fn expecting(
+                            &self,
+                            __formatter: &mut _serde::__private::Formatter,
+                        ) -> _serde::__private::fmt::Result {
+                            _serde::__private::Formatter::write_str(
+                                __formatter,
+                                "struct LoginForm",
+                            )
+                        }
+                        #[inline]
+                        fn visit_seq<__A>(
+                            self,
+                            mut __seq: __A,
+                        ) -> _serde::__private::Result<Self::Value, __A::Error>
+                        where
+                            __A: _serde::de::SeqAccess<'de>,
+                        {
+                            let __field0 = match _serde::de::SeqAccess::next_element::<
+                                String,
+                            >(&mut __seq)? {
+                                _serde::__private::Some(__value) => __value,
+                                _serde::__private::None => {
+                                    return _serde::__private::Err(
+                                        _serde::de::Error::invalid_length(
+                                            0usize,
+                                            &"struct LoginForm with 2 elements",
+                                        ),
+                                    );
+                                }
+                            };
+                            let __field1 = match _serde::de::SeqAccess::next_element::<
+                                String,
+                            >(&mut __seq)? {
+                                _serde::__private::Some(__value) => __value,
+                                _serde::__private::None => {
+                                    return _serde::__private::Err(
+                                        _serde::de::Error::invalid_length(
+                                            1usize,
+                                            &"struct LoginForm with 2 elements",
+                                        ),
+                                    );
+                                }
+                            };
+                            _serde::__private::Ok(LoginForm {
+                                email: __field0,
+                                password: __field1,
+                            })
+                        }
+                        #[inline]
+                        fn visit_map<__A>(
+                            self,
+                            mut __map: __A,
+                        ) -> _serde::__private::Result<Self::Value, __A::Error>
+                        where
+                            __A: _serde::de::MapAccess<'de>,
+                        {
+                            let mut __field0: _serde::__private::Option<String> = _serde::__private::None;
+                            let mut __field1: _serde::__private::Option<String> = _serde::__private::None;
+                            while let _serde::__private::Some(__key) = _serde::de::MapAccess::next_key::<
+                                __Field,
+                            >(&mut __map)? {
+                                match __key {
+                                    __Field::__field0 => {
+                                        if _serde::__private::Option::is_some(&__field0) {
+                                            return _serde::__private::Err(
+                                                <__A::Error as _serde::de::Error>::duplicate_field("email"),
+                                            );
+                                        }
+                                        __field0 = _serde::__private::Some(
+                                            _serde::de::MapAccess::next_value::<String>(&mut __map)?,
+                                        );
+                                    }
+                                    __Field::__field1 => {
+                                        if _serde::__private::Option::is_some(&__field1) {
+                                            return _serde::__private::Err(
+                                                <__A::Error as _serde::de::Error>::duplicate_field(
+                                                    "password",
+                                                ),
+                                            );
+                                        }
+                                        __field1 = _serde::__private::Some(
+                                            _serde::de::MapAccess::next_value::<String>(&mut __map)?,
+                                        );
+                                    }
+                                    _ => {
+                                        let _ = _serde::de::MapAccess::next_value::<
+                                            _serde::de::IgnoredAny,
+                                        >(&mut __map)?;
+                                    }
+                                }
+                            }
+                            let __field0 = match __field0 {
+                                _serde::__private::Some(__field0) => __field0,
+                                _serde::__private::None => {
+                                    _serde::__private::de::missing_field("email")?
+                                }
+                            };
+                            let __field1 = match __field1 {
+                                _serde::__private::Some(__field1) => __field1,
+                                _serde::__private::None => {
+                                    _serde::__private::de::missing_field("password")?
+                                }
+                            };
+                            _serde::__private::Ok(LoginForm {
+                                email: __field0,
+                                password: __field1,
+                            })
+                        }
+                    }
+                    #[doc(hidden)]
+                    const FIELDS: &'static [&'static str] = &["email", "password"];
+                    _serde::Deserializer::deserialize_struct(
+                        __deserializer,
+                        "LoginForm",
+                        FIELDS,
+                        __Visitor {
+                            marker: _serde::__private::PhantomData::<LoginForm>,
+                            lifetime: _serde::__private::PhantomData,
+                        },
+                    )
+                }
+            }
+        };
+        #[allow(non_camel_case_types, missing_docs)]
+        pub struct login;
+        impl ::actix_web::dev::HttpServiceFactory for login {
+            fn register(self, __config: &mut actix_web::dev::AppService) {
+                async fn login(
+                    state: State,
+                    form: web::Form<LoginForm>,
+                ) -> Result<impl Responder> {
+                    let user = User::get_by_email(&state, &form.email).await?;
+                    match user {
+                        Some(
+                            user,
+                        ) if user.check_password(&state, &form.password).await? => {
+                            {
+                                let lvl = ::log::Level::Info;
+                                if lvl <= ::log::STATIC_MAX_LEVEL
+                                    && lvl <= ::log::max_level()
+                                {
+                                    ::log::__private_api::log(
+                                        format_args!(
+                                            "Successful login for user #{0} <{1}>",
+                                            user.id,
+                                            user.email,
+                                        ),
+                                        lvl,
+                                        &(
+                                            "backend::routes::auth",
+                                            "backend::routes::auth",
+                                            ::log::__private_api::loc(),
+                                        ),
+                                        (),
+                                    );
+                                }
+                            };
+                            let token = Session::new_token_for_user(&state, &user)
+                                .await?;
+                            Ok(HttpResponse::Ok())
+                        }
+                        user => {
+                            let reason = if user.is_some() {
+                                "invalid password"
+                            } else {
+                                "no such user"
+                            };
+                            {
+                                let lvl = ::log::Level::Info;
+                                if lvl <= ::log::STATIC_MAX_LEVEL
+                                    && lvl <= ::log::max_level()
+                                {
+                                    ::log::__private_api::log(
+                                        format_args!(
+                                            "Failed login for <{0}>: {1}",
+                                            form.email,
+                                            reason,
+                                        ),
+                                        lvl,
+                                        &(
+                                            "backend::routes::auth",
+                                            "backend::routes::auth",
+                                            ::log::__private_api::loc(),
+                                        ),
+                                        (),
+                                    );
+                                }
+                            };
+                            Err(AppError::Unauthorised)
+                        }
+                    }
+                }
+                let __resource = ::actix_web::Resource::new("/api/login")
+                    .name("login")
+                    .guard(::actix_web::guard::Post())
+                    .to(login);
+                ::actix_web::dev::HttpServiceFactory::register(__resource, __config);
+            }
+        }
+    }
+    mod index {
+        use actix_files::NamedFile;
+        use actix_web::{get, web, Responder};
+        use crate::result::Result;
+        /// Declares routes for serving static content.
+        pub fn declare_routes(conf: &mut web::ServiceConfig) {
+            conf.service(index).service(tsumego_js);
+        }
+        #[allow(non_camel_case_types, missing_docs)]
+        pub struct index;
+        impl ::actix_web::dev::HttpServiceFactory for index {
+            fn register(self, __config: &mut actix_web::dev::AppService) {
+                async fn index() -> Result<impl Responder> {
+                    Ok(NamedFile::open_async("static/index.html").await?)
+                }
+                let __resource = ::actix_web::Resource::new("/")
+                    .name("index")
+                    .guard(::actix_web::guard::Get())
+                    .to(index);
+                ::actix_web::dev::HttpServiceFactory::register(__resource, __config);
+            }
+        }
+        #[allow(non_camel_case_types, missing_docs)]
+        pub struct tsumego_js;
+        impl ::actix_web::dev::HttpServiceFactory for tsumego_js {
+            fn register(self, __config: &mut actix_web::dev::AppService) {
+                async fn tsumego_js() -> Result<impl Responder> {
+                    Ok(NamedFile::open_async("static/tsumego.js").await?)
+                }
+                let __resource = ::actix_web::Resource::new("/out/tsumego.js")
+                    .name("tsumego_js")
+                    .guard(::actix_web::guard::Get())
+                    .to(tsumego_js);
+                ::actix_web::dev::HttpServiceFactory::register(__resource, __config);
+            }
+        }
+    }
+    mod tsumego {
+        use actix_web::{get, web, HttpResponse, Responder};
+        use crate::{
+            model::Tsumego, result::{AppError, Result},
+            state::State,
+        };
+        /// Declares routes for fetching Tsumego data.
+        pub fn declare_routes(conf: &mut web::ServiceConfig) {
+            conf.service(get_tsumego).service(all_tsumego);
+        }
+        #[allow(non_camel_case_types, missing_docs)]
+        pub struct get_tsumego;
+        impl ::actix_web::dev::HttpServiceFactory for get_tsumego {
+            fn register(self, __config: &mut actix_web::dev::AppService) {
+                async fn get_tsumego(
+                    state: State,
+                    id: web::Path<i64>,
+                ) -> Result<impl Responder> {
+                    let tsumego = Tsumego::get_by_id(&state, *id).await?;
+                    match tsumego {
+                        Some(tsumego) => Ok(HttpResponse::Ok().json(tsumego)),
+                        _ => Err(AppError::NotFound),
+                    }
+                }
+                let __resource = ::actix_web::Resource::new("/api/problem/{id}")
+                    .name("get_tsumego")
+                    .guard(::actix_web::guard::Get())
+                    .to(get_tsumego);
+                ::actix_web::dev::HttpServiceFactory::register(__resource, __config);
+            }
+        }
+        #[allow(non_camel_case_types, missing_docs)]
+        pub struct all_tsumego;
+        impl ::actix_web::dev::HttpServiceFactory for all_tsumego {
+            fn register(self, __config: &mut actix_web::dev::AppService) {
+                async fn all_tsumego(state: State) -> Result<impl Responder> {
+                    let problems = Tsumego::get_all(&state).await?;
+                    Ok(
+                        HttpResponse::Ok()
+                            .json(
+                                ::serde_json::Value::Object({
+                                    let mut object = ::serde_json::Map::new();
+                                    let _ = object
+                                        .insert(
+                                            ("problems").into(),
+                                            ::serde_json::to_value(&problems).unwrap(),
+                                        );
+                                    object
+                                }),
+                            ),
+                    )
+                }
+                let __resource = ::actix_web::Resource::new("/api/all_problems")
+                    .name("all_tsumego")
+                    .guard(::actix_web::guard::Get())
+                    .to(all_tsumego);
+                ::actix_web::dev::HttpServiceFactory::register(__resource, __config);
+            }
+        }
+    }
+    /// Declares all routes for the application.
+    pub fn declare_routes(conf: &mut actix_web::web::ServiceConfig) {
+        auth::declare_routes(conf);
+        index::declare_routes(conf);
+        tsumego::declare_routes(conf);
+    }
+}
+mod state {
+    use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+    /// The `actix_web` application state, consisting of a database handle and the
+    /// application config.
+    pub type State = actix_web::web::Data<InnerState>;
+    pub struct InnerState {
+        pub db: SqlitePool,
+        pub cfg: Config,
+    }
+    type CowStr = std::borrow::Cow<'static, str>;
+    /// The application's config parameters, which are loaded from the environment
+    /// by the `from_env()` function.
+    pub struct Config {
+        pub host_addr: CowStr,
+        pub host_port: u16,
+        pub database_url: CowStr,
+        pub database_pool_size: u32,
+        pub session_token_cookie_name: CowStr,
+        pub session_duration_days: u32,
+        pub session_renew_after_days: u32,
+    }
+    #[doc(hidden)]
+    #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+    const _: () = {
+        #[allow(unused_extern_crates, clippy::useless_attribute)]
+        extern crate serde as _serde;
+        #[automatically_derived]
+        impl<'de> _serde::Deserialize<'de> for Config {
+            fn deserialize<__D>(
+                __deserializer: __D,
+            ) -> _serde::__private::Result<Self, __D::Error>
+            where
+                __D: _serde::Deserializer<'de>,
+            {
+                #[allow(non_camel_case_types)]
+                #[doc(hidden)]
+                enum __Field {
+                    __field0,
+                    __field1,
+                    __field2,
+                    __field3,
+                    __field4,
+                    __field5,
+                    __field6,
+                    __ignore,
+                }
+                #[doc(hidden)]
+                struct __FieldVisitor;
+                impl<'de> _serde::de::Visitor<'de> for __FieldVisitor {
+                    type Value = __Field;
+                    fn expecting(
+                        &self,
+                        __formatter: &mut _serde::__private::Formatter,
+                    ) -> _serde::__private::fmt::Result {
+                        _serde::__private::Formatter::write_str(
+                            __formatter,
+                            "field identifier",
+                        )
+                    }
+                    fn visit_u64<__E>(
+                        self,
+                        __value: u64,
+                    ) -> _serde::__private::Result<Self::Value, __E>
+                    where
+                        __E: _serde::de::Error,
+                    {
+                        match __value {
+                            0u64 => _serde::__private::Ok(__Field::__field0),
+                            1u64 => _serde::__private::Ok(__Field::__field1),
+                            2u64 => _serde::__private::Ok(__Field::__field2),
+                            3u64 => _serde::__private::Ok(__Field::__field3),
+                            4u64 => _serde::__private::Ok(__Field::__field4),
+                            5u64 => _serde::__private::Ok(__Field::__field5),
+                            6u64 => _serde::__private::Ok(__Field::__field6),
+                            _ => _serde::__private::Ok(__Field::__ignore),
+                        }
+                    }
+                    fn visit_str<__E>(
+                        self,
+                        __value: &str,
+                    ) -> _serde::__private::Result<Self::Value, __E>
+                    where
+                        __E: _serde::de::Error,
+                    {
+                        match __value {
+                            "host_addr" => _serde::__private::Ok(__Field::__field0),
+                            "host_port" => _serde::__private::Ok(__Field::__field1),
+                            "database_url" => _serde::__private::Ok(__Field::__field2),
+                            "database_pool_size" => {
+                                _serde::__private::Ok(__Field::__field3)
+                            }
+                            "session_token_cookie_name" => {
+                                _serde::__private::Ok(__Field::__field4)
+                            }
+                            "session_duration_days" => {
+                                _serde::__private::Ok(__Field::__field5)
+                            }
+                            "session_renew_after_days" => {
+                                _serde::__private::Ok(__Field::__field6)
+                            }
+                            _ => _serde::__private::Ok(__Field::__ignore),
+                        }
+                    }
+                    fn visit_bytes<__E>(
+                        self,
+                        __value: &[u8],
+                    ) -> _serde::__private::Result<Self::Value, __E>
+                    where
+                        __E: _serde::de::Error,
+                    {
+                        match __value {
+                            b"host_addr" => _serde::__private::Ok(__Field::__field0),
+                            b"host_port" => _serde::__private::Ok(__Field::__field1),
+                            b"database_url" => _serde::__private::Ok(__Field::__field2),
+                            b"database_pool_size" => {
+                                _serde::__private::Ok(__Field::__field3)
+                            }
+                            b"session_token_cookie_name" => {
+                                _serde::__private::Ok(__Field::__field4)
+                            }
+                            b"session_duration_days" => {
+                                _serde::__private::Ok(__Field::__field5)
+                            }
+                            b"session_renew_after_days" => {
+                                _serde::__private::Ok(__Field::__field6)
+                            }
+                            _ => _serde::__private::Ok(__Field::__ignore),
+                        }
+                    }
+                }
+                impl<'de> _serde::Deserialize<'de> for __Field {
+                    #[inline]
+                    fn deserialize<__D>(
+                        __deserializer: __D,
+                    ) -> _serde::__private::Result<Self, __D::Error>
+                    where
+                        __D: _serde::Deserializer<'de>,
+                    {
+                        _serde::Deserializer::deserialize_identifier(
+                            __deserializer,
+                            __FieldVisitor,
+                        )
+                    }
+                }
+                #[doc(hidden)]
+                struct __Visitor<'de> {
+                    marker: _serde::__private::PhantomData<Config>,
+                    lifetime: _serde::__private::PhantomData<&'de ()>,
+                }
+                impl<'de> _serde::de::Visitor<'de> for __Visitor<'de> {
+                    type Value = Config;
+                    fn expecting(
+                        &self,
+                        __formatter: &mut _serde::__private::Formatter,
+                    ) -> _serde::__private::fmt::Result {
+                        _serde::__private::Formatter::write_str(
+                            __formatter,
+                            "struct Config",
+                        )
+                    }
+                    #[inline]
+                    fn visit_seq<__A>(
+                        self,
+                        mut __seq: __A,
+                    ) -> _serde::__private::Result<Self::Value, __A::Error>
+                    where
+                        __A: _serde::de::SeqAccess<'de>,
+                    {
+                        let __field0 = match _serde::de::SeqAccess::next_element::<
+                            CowStr,
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        0usize,
+                                        &"struct Config with 7 elements",
+                                    ),
+                                );
+                            }
+                        };
+                        let __field1 = match _serde::de::SeqAccess::next_element::<
+                            u16,
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        1usize,
+                                        &"struct Config with 7 elements",
+                                    ),
+                                );
+                            }
+                        };
+                        let __field2 = match _serde::de::SeqAccess::next_element::<
+                            CowStr,
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        2usize,
+                                        &"struct Config with 7 elements",
+                                    ),
+                                );
+                            }
+                        };
+                        let __field3 = match _serde::de::SeqAccess::next_element::<
+                            u32,
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        3usize,
+                                        &"struct Config with 7 elements",
+                                    ),
+                                );
+                            }
+                        };
+                        let __field4 = match _serde::de::SeqAccess::next_element::<
+                            CowStr,
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        4usize,
+                                        &"struct Config with 7 elements",
+                                    ),
+                                );
+                            }
+                        };
+                        let __field5 = match _serde::de::SeqAccess::next_element::<
+                            u32,
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        5usize,
+                                        &"struct Config with 7 elements",
+                                    ),
+                                );
+                            }
+                        };
+                        let __field6 = match _serde::de::SeqAccess::next_element::<
+                            u32,
+                        >(&mut __seq)? {
+                            _serde::__private::Some(__value) => __value,
+                            _serde::__private::None => {
+                                return _serde::__private::Err(
+                                    _serde::de::Error::invalid_length(
+                                        6usize,
+                                        &"struct Config with 7 elements",
+                                    ),
+                                );
+                            }
+                        };
+                        _serde::__private::Ok(Config {
+                            host_addr: __field0,
+                            host_port: __field1,
+                            database_url: __field2,
+                            database_pool_size: __field3,
+                            session_token_cookie_name: __field4,
+                            session_duration_days: __field5,
+                            session_renew_after_days: __field6,
+                        })
+                    }
+                    #[inline]
+                    fn visit_map<__A>(
+                        self,
+                        mut __map: __A,
+                    ) -> _serde::__private::Result<Self::Value, __A::Error>
+                    where
+                        __A: _serde::de::MapAccess<'de>,
+                    {
+                        let mut __field0: _serde::__private::Option<CowStr> = _serde::__private::None;
+                        let mut __field1: _serde::__private::Option<u16> = _serde::__private::None;
+                        let mut __field2: _serde::__private::Option<CowStr> = _serde::__private::None;
+                        let mut __field3: _serde::__private::Option<u32> = _serde::__private::None;
+                        let mut __field4: _serde::__private::Option<CowStr> = _serde::__private::None;
+                        let mut __field5: _serde::__private::Option<u32> = _serde::__private::None;
+                        let mut __field6: _serde::__private::Option<u32> = _serde::__private::None;
+                        while let _serde::__private::Some(__key) = _serde::de::MapAccess::next_key::<
+                            __Field,
+                        >(&mut __map)? {
+                            match __key {
+                                __Field::__field0 => {
+                                    if _serde::__private::Option::is_some(&__field0) {
+                                        return _serde::__private::Err(
+                                            <__A::Error as _serde::de::Error>::duplicate_field(
+                                                "host_addr",
+                                            ),
+                                        );
+                                    }
+                                    __field0 = _serde::__private::Some(
+                                        _serde::de::MapAccess::next_value::<CowStr>(&mut __map)?,
+                                    );
+                                }
+                                __Field::__field1 => {
+                                    if _serde::__private::Option::is_some(&__field1) {
+                                        return _serde::__private::Err(
+                                            <__A::Error as _serde::de::Error>::duplicate_field(
+                                                "host_port",
+                                            ),
+                                        );
+                                    }
+                                    __field1 = _serde::__private::Some(
+                                        _serde::de::MapAccess::next_value::<u16>(&mut __map)?,
+                                    );
+                                }
+                                __Field::__field2 => {
+                                    if _serde::__private::Option::is_some(&__field2) {
+                                        return _serde::__private::Err(
+                                            <__A::Error as _serde::de::Error>::duplicate_field(
+                                                "database_url",
+                                            ),
+                                        );
+                                    }
+                                    __field2 = _serde::__private::Some(
+                                        _serde::de::MapAccess::next_value::<CowStr>(&mut __map)?,
+                                    );
+                                }
+                                __Field::__field3 => {
+                                    if _serde::__private::Option::is_some(&__field3) {
+                                        return _serde::__private::Err(
+                                            <__A::Error as _serde::de::Error>::duplicate_field(
+                                                "database_pool_size",
+                                            ),
+                                        );
+                                    }
+                                    __field3 = _serde::__private::Some(
+                                        _serde::de::MapAccess::next_value::<u32>(&mut __map)?,
+                                    );
+                                }
+                                __Field::__field4 => {
+                                    if _serde::__private::Option::is_some(&__field4) {
+                                        return _serde::__private::Err(
+                                            <__A::Error as _serde::de::Error>::duplicate_field(
+                                                "session_token_cookie_name",
+                                            ),
+                                        );
+                                    }
+                                    __field4 = _serde::__private::Some(
+                                        _serde::de::MapAccess::next_value::<CowStr>(&mut __map)?,
+                                    );
+                                }
+                                __Field::__field5 => {
+                                    if _serde::__private::Option::is_some(&__field5) {
+                                        return _serde::__private::Err(
+                                            <__A::Error as _serde::de::Error>::duplicate_field(
+                                                "session_duration_days",
+                                            ),
+                                        );
+                                    }
+                                    __field5 = _serde::__private::Some(
+                                        _serde::de::MapAccess::next_value::<u32>(&mut __map)?,
+                                    );
+                                }
+                                __Field::__field6 => {
+                                    if _serde::__private::Option::is_some(&__field6) {
+                                        return _serde::__private::Err(
+                                            <__A::Error as _serde::de::Error>::duplicate_field(
+                                                "session_renew_after_days",
+                                            ),
+                                        );
+                                    }
+                                    __field6 = _serde::__private::Some(
+                                        _serde::de::MapAccess::next_value::<u32>(&mut __map)?,
+                                    );
+                                }
+                                _ => {
+                                    let _ = _serde::de::MapAccess::next_value::<
+                                        _serde::de::IgnoredAny,
+                                    >(&mut __map)?;
+                                }
+                            }
+                        }
+                        let __field0 = match __field0 {
+                            _serde::__private::Some(__field0) => __field0,
+                            _serde::__private::None => {
+                                _serde::__private::de::missing_field("host_addr")?
+                            }
+                        };
+                        let __field1 = match __field1 {
+                            _serde::__private::Some(__field1) => __field1,
+                            _serde::__private::None => {
+                                _serde::__private::de::missing_field("host_port")?
+                            }
+                        };
+                        let __field2 = match __field2 {
+                            _serde::__private::Some(__field2) => __field2,
+                            _serde::__private::None => {
+                                _serde::__private::de::missing_field("database_url")?
+                            }
+                        };
+                        let __field3 = match __field3 {
+                            _serde::__private::Some(__field3) => __field3,
+                            _serde::__private::None => {
+                                _serde::__private::de::missing_field("database_pool_size")?
+                            }
+                        };
+                        let __field4 = match __field4 {
+                            _serde::__private::Some(__field4) => __field4,
+                            _serde::__private::None => {
+                                _serde::__private::de::missing_field(
+                                    "session_token_cookie_name",
+                                )?
+                            }
+                        };
+                        let __field5 = match __field5 {
+                            _serde::__private::Some(__field5) => __field5,
+                            _serde::__private::None => {
+                                _serde::__private::de::missing_field(
+                                    "session_duration_days",
+                                )?
+                            }
+                        };
+                        let __field6 = match __field6 {
+                            _serde::__private::Some(__field6) => __field6,
+                            _serde::__private::None => {
+                                _serde::__private::de::missing_field(
+                                    "session_renew_after_days",
+                                )?
+                            }
+                        };
+                        _serde::__private::Ok(Config {
+                            host_addr: __field0,
+                            host_port: __field1,
+                            database_url: __field2,
+                            database_pool_size: __field3,
+                            session_token_cookie_name: __field4,
+                            session_duration_days: __field5,
+                            session_renew_after_days: __field6,
+                        })
+                    }
+                }
+                #[doc(hidden)]
+                const FIELDS: &'static [&'static str] = &[
+                    "host_addr",
+                    "host_port",
+                    "database_url",
+                    "database_pool_size",
+                    "session_token_cookie_name",
+                    "session_duration_days",
+                    "session_renew_after_days",
+                ];
+                _serde::Deserializer::deserialize_struct(
+                    __deserializer,
+                    "Config",
+                    FIELDS,
+                    __Visitor {
+                        marker: _serde::__private::PhantomData::<Config>,
+                        lifetime: _serde::__private::PhantomData,
+                    },
+                )
+            }
+        }
+    };
+    /// Loads the initial application state from the environment variables
+    /// specified in `.env`.
+    pub async fn from_env() -> State {
+        let cfg: Config = envy::from_env()
+            .unwrap_or_else(|err| {
+                {
+                    ::std::io::_eprint(
+                        format_args!(
+                            "Failed to load config from environment: {0:?}\n",
+                            err,
+                        ),
+                    );
+                };
+                std::process::exit(1);
+            });
+        let db = SqlitePoolOptions::new()
+            .max_connections(cfg.database_pool_size)
+            .connect(&cfg.database_url)
+            .await
+            .unwrap_or_else(|err| {
+                {
+                    ::std::io::_eprint(
+                        format_args!("Failed to connect to the database: {0:?}\n", err),
+                    );
+                };
+                std::process::exit(1);
+            });
+        State::new(InnerState { db, cfg })
+    }
+}
+fn main() -> std::io::Result<()> {
+    <::actix_web::rt::System>::new()
+        .block_on(async move {
+            {
+                dotenvy::dotenv()
+                    .expect("Failed to load environment variables from '.env'");
+                let log_env = env_logger::Env::default()
+                    .filter("LOG")
+                    .write_style("LOG_STYLE");
+                env_logger::Builder::from_env(log_env).format_module_path(false).init();
+                let state = state::from_env().await;
+                let host_addr = state.cfg.host_addr.to_string();
+                let host_port = state.cfg.host_port;
+                {
+                    ::std::io::_print(
+                        format_args!("Listening on {0}:{1}\n", host_addr, host_port),
+                    );
+                };
+                HttpServer::new(move || {
+                        App::new()
+                            .app_data(state.clone())
+                            .configure(routes::declare_routes)
+                            .wrap(middleware::from_fn(auth::auth_middleware))
+                            .wrap(Logger::default())
+                    })
+                    .bind((host_addr, host_port))?
+                    .run()
+                    .await
+            }
+        })
+}

@@ -3,9 +3,7 @@ use actix_web::{
 };
 
 use crate::{
-    model::{User, Session},
-    result::{AppError, Result},
-    state::State,
+    auth, model::User, result::{AppError, Result}, state::State
 };
 
 /// Declares routes for login/logout and other authentication actions.
@@ -25,7 +23,7 @@ async fn login(state: State, form: web::Form<LoginForm>) -> Result<impl Responde
         Some(user) if user.check_password(&state, &form.password).await? => {
             log::info!("Successful login for user #{} <{}>", user.id, user.email);
             
-            let token = Session::new_token_for_user(&state, &user)
+            let token = user.new_session_token(&state)
                 .await?;
             
             // TODO: set cookie

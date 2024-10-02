@@ -1,5 +1,5 @@
 use actix_web::{
-    middleware::Logger,
+    middleware::{self, Logger},
     App,
     HttpServer,
 };
@@ -31,6 +31,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || App::new()
         .app_data(state.clone())
         .configure(routes::declare_routes)
+        .wrap(middleware::from_fn(auth::auth_middleware))
         .wrap(Logger::default())
     )
         .bind((host_addr, host_port))?

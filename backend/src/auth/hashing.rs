@@ -85,10 +85,8 @@ fn base64_encode(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod test {
-    use crate::auth::token_hash;
-
-    use super::{check_password, generate_password_hash, generate_session_token};
-
+    use super::{check_password, generate_password_hash, token_hash, generate_session_token};
+    
     #[test]
     fn test_password_hash() {
         let hash = generate_password_hash("example").unwrap();
