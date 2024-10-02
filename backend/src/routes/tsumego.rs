@@ -4,6 +4,7 @@ use actix_web::{
     HttpResponse,
     Responder,
 };
+use serde_json::json;
 
 use crate::{
     model::Tsumego,
@@ -33,7 +34,7 @@ async fn all_tsumego(state: State) -> Result<impl Responder> {
     let problems = Tsumego::get_all(&state)
         .await?;
     
-    Ok(HttpResponse::Ok().json(serde_json::json!({
+    Ok(HttpResponse::Ok().json(json!({
         "problems": problems,
     })))
 }

@@ -2,7 +2,7 @@ use crate::{
     result::Result, state::State
 };
 
-#[derive(sqlx::FromRow)]
+#[derive(Clone, serde::Serialize, sqlx::FromRow)]
 pub struct User {
     pub id: i64,
     pub email: String,

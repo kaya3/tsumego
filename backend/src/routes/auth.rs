@@ -1,14 +1,16 @@
 use actix_web::{
-    post, web, HttpResponse, Responder
+    get, post, web, HttpResponse, Responder
 };
+use serde_json::{json, Value};
 
 use crate::{
-    auth, model::User, result::{AppError, Result}, state::State
+    auth::MaybeAuth, model::User, result::{AppError, Result}, state::State
 };
 
 /// Declares routes for login/logout and other authentication actions.
 pub fn declare_routes(conf: &mut web::ServiceConfig) {
-    conf.service(login);
+    conf.service(login)
+        .service(who_am_i);
 }
 
 #[derive(serde::Deserialize)]
@@ -42,4 +44,9 @@ async fn login(state: State, form: web::Form<LoginForm>) -> Result<impl Responde
             Err(AppError::Unauthorised)
         },
     }
+}
+
+#[get("/api/who_am_i")]
+async fn who_am_i(user: MaybeAuth) -> Result<impl Responder> {
+    Ok(HttpResponse::Ok().json(user.user()))
 }
