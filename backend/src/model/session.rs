@@ -12,6 +12,8 @@ pub struct Session {
 impl Session {
     const TOKEN_GENERATOR_MAX_RETRIES: usize = 32;
     
+    /// Generates a new session token for the given user, and inserts it into
+    /// the database. This should be called on a successful login.
     pub async fn new_token_for_user(state: &State, user: &User) -> Result<String> {
         // Check for duplicate tokens and regenerate them. It is astronomically
         // unlikely that a duplicate will be generated, unless `thread_rng` is
@@ -47,5 +49,4 @@ impl Session {
         
         Ok(token)
     }
-    
 }

@@ -35,7 +35,8 @@ pub fn generate_password_hash(new_password: &str) -> Result<String> {
 }
 
 /// The number of bytes of entropy in a session token. There is not much point
-/// in this being larger than 16, since.
+/// in this being larger than 16; OWASP recommends at least 8 bytes of entropy.
+/// https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#session-id-entropy
 /// 
 /// We round up to the next multiple of three, since the token is encoded in
 /// base64, so each three unencoded bytes become four encoded bytes. If the
@@ -59,11 +60,16 @@ pub fn generate_session_token() -> (String, String) {
     (raw, hash)
 }
 
-/// Computes a fast hash of a session token. The hash is cryptographically
-/// secure, but not suitable for passwords.
+/// Computes a fast hash of a session token.
 /// 
-/// This function should be used to hash session tokens from client cookies,
-/// in order to authenticate already-logged-in users.
+/// A fast hash is used because session tokens are authenticated on every
+/// request; using a fast hash rather than a slow password hash is OK, because
+/// session tokens are randomly generated rather than chosen by the user, and
+/// revoked soon enough that they cannot be feasibly brute-forced.
+/// 
+/// The hash is cryptographically secure, but not suitable for passwords. This
+/// function should be used to hash session tokens from client cookies, in
+/// order to authenticate already-logged-in users.
 pub fn token_hash(s: &str) -> String {
     use sha2::{Sha256, Digest};
     

@@ -22,5 +22,21 @@
             loop();
         });
     </script>
+    
+    <form action="/api/login" method="post">
+        <div style="display: flex; flex-direction: column;">
+            <div style="display: flex; flex-direction: row;">
+                <label for="email">Email:</label>
+                <input name="email">
+            </div>
+            <div style="display: flex; flex-direction: row;">
+                <label for="password">Password:</label>
+                <input name="password" type="password">
+            </div>
+            <div style="display: flex; flex-direction: row; align-items: center;">
+                <input type="submit" value="Log in">
+            </div>
+        </div>
+    </form>
 </body>
 </html>
