@@ -6,6 +6,7 @@ pub type Result<T, E = AppError> = std::result::Result<T, E>;
 pub enum AppError {
     NotFound,
     Unauthorised,
+    Hasher(password_hash::Error),
     Io(std::io::Error),
     Sql(sqlx::Error),
 }
@@ -45,5 +46,11 @@ impl From<std::io::Error> for AppError {
 impl From<sqlx::Error> for AppError {
     fn from(err: sqlx::Error) -> Self {
         AppError::Sql(err)
+    }
+}
+
+impl From<password_hash::Error> for AppError {
+    fn from(err: password_hash::Error) -> Self {
+        AppError::Hasher(err)
     }
 }

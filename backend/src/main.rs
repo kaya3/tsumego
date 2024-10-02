@@ -4,6 +4,7 @@ use actix_web::{
     HttpServer,
 };
 
+mod auth;
 mod model;
 mod result;
 mod routes;
