@@ -16,7 +16,8 @@ impl Tsumego {
     /// Fetches a Tsumego from the database by its id, returning an error if
     /// the id is not found.
     pub async fn require_by_id(state: &State, id: i64) -> Result<Self, sqlx::Error> {
-        Self::get_by_id(state, id).await?
+        Self::get_by_id(state, id)
+            .await?
             .map_or(Err(sqlx::Error::RowNotFound), Ok)
     }
     

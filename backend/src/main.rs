@@ -10,7 +10,8 @@ mod state;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    dotenvy::dotenv().expect("Failed to load environment variables from '.env'");
+    dotenvy::dotenv()
+        .expect("Failed to load environment variables from '.env'");
     
     let log_env = env_logger::Env::default()
         .filter("LOG")
