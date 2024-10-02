@@ -1,3 +1,5 @@
+use sqlx::types::JsonValue;
+
 use crate::state::State;
 
 #[derive(serde::Serialize, sqlx::FromRow)]
@@ -5,8 +7,7 @@ pub struct Tsumego {
     pub id: i64,
     pub name: String,
     pub board: String,
-    // TODO: this is coming out as a String instead of an Object
-    pub tree: sqlx::types::JsonValue,
+    pub tree: JsonValue,
 }
 
 impl Tsumego {
@@ -16,7 +17,7 @@ impl Tsumego {
     }
     
     pub async fn get_by_id(state: &State, id: i64) -> Result<Option<Self>, sqlx::Error> {
-        let tsumego = sqlx::query_as!(Self, "SELECT id, name, board, tree FROM tsumego WHERE id = ?", id)
+        let tsumego = sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego WHERE id = ?", id)
             .fetch_optional(&state.db)
             .await?;
         
@@ -25,8 +26,14 @@ impl Tsumego {
     }
     
     pub async fn get_by_name(state: &State, name: &str) -> Result<Option<Self>, sqlx::Error> {
-        Ok(sqlx::query_as!(Self, "SELECT id, name, board, tree FROM tsumego WHERE name = ? LIMIT 1", name)
+        Ok(sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego WHERE name = ? LIMIT 1", name)
             .fetch_optional(&state.db)
+            .await?)
+    }
+    
+    pub async fn get_all(state: &State) -> Result<Vec<Tsumego>, sqlx::Error> {
+        Ok(sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego")
+            .fetch_all(&state.db)
             .await?)
     }
 }

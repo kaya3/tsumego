@@ -1,5 +1,5 @@
 namespace TsumegoAPI {
-    const TSUMEGO_ENDPOINT = 'out/all_problems.json';
+    const TSUMEGO_ENDPOINT = '/api/all_problems';
     
     export async function loadAllTsumego(): Promise<Tsumego[]> {
         const response = await fetch(TSUMEGO_ENDPOINT);
