@@ -1,6 +1,8 @@
 use actix_files::NamedFile;
 use actix_web::{get, web, Responder};
 
+use crate::result::Result;
+
 /// Declares routes for serving static content.
 pub fn declare_routes(conf: &mut web::ServiceConfig) {
     conf.service(index)
@@ -8,11 +10,11 @@ pub fn declare_routes(conf: &mut web::ServiceConfig) {
 }
 
 #[get("/")]
-async fn index() -> std::io::Result<impl Responder> {
-    NamedFile::open_async("static/index.html").await
+async fn index() -> Result<impl Responder> {
+    Ok(NamedFile::open_async("static/index.html").await?)
 }
 
 #[get("/out/tsumego.js")]
-async fn tsumego_js() -> std::io::Result<impl Responder> {
-    NamedFile::open_async("static/tsumego.js").await
+async fn tsumego_js() -> Result<impl Responder> {
+    Ok(NamedFile::open_async("static/tsumego.js").await?)
 }

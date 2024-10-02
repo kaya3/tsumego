@@ -1,3 +1,4 @@
+use crate::result::Result;
 use crate::state::State;
 
 #[derive(sqlx::FromRow)]
@@ -9,26 +10,28 @@ pub struct User {
 }
 
 impl User {
-    pub async fn require_by_id(state: &State, id: i64) -> Result<User, sqlx::Error> {
-        User::get_by_id(state, id)
+    pub async fn require_by_id(state: &State, id: i64) -> Result<Self> {
+        Self::get_by_id(state, id)
             .await?
-            .map_or(Err(sqlx::Error::RowNotFound), Ok)
+            .map_or(Err(sqlx::Error::RowNotFound.into()), Ok)
     }
     
-    pub async fn get_by_id(state: &State, id: i64) -> Result<Option<User>, sqlx::Error> {
-        Ok(sqlx::query_as!(User, "SELECT id, email, display_name, is_admin FROM users WHERE id = ?", id)
+    pub async fn get_by_id(state: &State, id: i64) -> Result<Option<Self>> {
+        Ok(sqlx::query_as!(Self, "SELECT id, email, display_name, is_admin FROM users WHERE id = ?", id)
             .fetch_optional(&state.db)
             .await?)
     }
     
-    pub async fn get_by_email(state: &State, email: &str) -> Result<Option<User>, sqlx::Error> {
-        Ok(sqlx::query_as!(User, "SELECT id, email, display_name, is_admin FROM users WHERE email = ? LIMIT 1", email)
+    pub async fn get_by_email(state: &State, email: &str) -> Result<Option<Self>> {
+        // The `users.email` column is declared with `NOCASE`, so there is no
+        // need to normalise before querying
+        Ok(sqlx::query_as!(Self, "SELECT id, email, display_name, is_admin FROM users WHERE email = ? LIMIT 1", email)
             .fetch_optional(&state.db)
             .await?)
     }
     
-    pub async fn get_all(state: &State) -> Result<Vec<User>, sqlx::Error> {
-        Ok(sqlx::query_as!(User, "SELECT id, email, display_name, is_admin FROM users ORDER by id")
+    pub async fn get_all(state: &State) -> Result<Vec<Self>> {
+        Ok(sqlx::query_as!(Self, "SELECT id, email, display_name, is_admin FROM users ORDER by id")
             .fetch_all(&state.db)
             .await?)
     }

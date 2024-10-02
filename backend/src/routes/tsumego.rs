@@ -7,6 +7,7 @@ use actix_web::{
 
 use crate::{
     model::Tsumego,
+    result::{AppError, Result},
     state::State,
 };
 
@@ -17,28 +18,22 @@ pub fn declare_routes(conf: &mut web::ServiceConfig) {
 }
 
 #[get("/api/problem/{id}")]
-async fn get_tsumego(state: State, id: web::Path<i64>) -> impl Responder {
+async fn get_tsumego(state: State, id: web::Path<i64>) -> Result<impl Responder> {
     let tsumego = Tsumego::get_by_id(&state, *id)
-        .await;
+        .await?;
     
     match tsumego {
-        Ok(Some(tsumego)) => HttpResponse::Ok().json(tsumego),
-        _ => HttpResponse::NotFound().finish(),
+        Some(tsumego) => Ok(HttpResponse::Ok().json(tsumego)),
+        _ => Err(AppError::NotFound),
     }
 }
 
 #[get("/api/all_problems")]
-async fn all_tsumego(state: State) -> impl Responder {
+async fn all_tsumego(state: State) -> Result<impl Responder> {
     let problems = Tsumego::get_all(&state)
-        .await;
+        .await?;
     
-    match problems {
-        Ok(problems) => HttpResponse::Ok().json(serde_json::json!({
-            "problems": problems,
-        })),
-        Err(e) => {
-            log::error!("Error loading all problems: {e}");
-            HttpResponse::InternalServerError().finish()
-        },
-    }
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "problems": problems,
+    })))
 }

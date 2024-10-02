@@ -5,6 +5,7 @@ use actix_web::{
 };
 
 mod model;
+mod result;
 mod routes;
 mod state;
 
