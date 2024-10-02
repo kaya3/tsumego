@@ -41,46 +41,20 @@ pub fn generate_password_hash(new_password: &str) -> Result<String> {
 /// base64, so each three unencoded bytes become four encoded bytes. If the
 /// number of bytes is not a multiple of 3, the encoded token will end with `=`
 /// characters which add no entropy.
-const SESSION_TOKEN_BYTES: usize = 18;
-
-const TOKEN_GENERATOR_MAX_RETRIES: usize = 32;
+pub const SESSION_TOKEN_BYTES: usize = 18;
 
 /// Generates a new random session token, and its hash. The hash should be
 /// stored in the database, and the raw token should be issued to the client as
 /// a cookie.
 /// 
-/// The `hash_is_fresh` function should check that the hash doesn't already
-/// exist in the database. It is astronomically unlikely to generate duplicate
-/// tokens, but this way a duplicate can be detected and regenerated.
-/// 
 /// Returns `(token, hash)`.
-pub fn generate_session_token(hash_is_fresh: impl Fn(&str) -> bool) -> (String, String) {
+pub fn generate_session_token() -> (String, String) {
     use rand::{Rng, thread_rng};
     
     let mut bytes = [0u8; SESSION_TOKEN_BYTES];
-    
-    let mut retries: usize = 0;
-    let (raw, hash) = loop {
-        thread_rng().fill(&mut bytes);
-        let raw = base64_encode(&bytes);
-        let hash = token_hash(raw.as_str());
-        
-        if hash_is_fresh(hash.as_str()) {
-            break (raw, hash);
-        }
-        
-        retries += 1;
-        if retries >= TOKEN_GENERATOR_MAX_RETRIES {
-            // If this ever happens, the RNG is catastrophically broken.
-            // Perhaps it is returning all zeroes, or something.
-            panic!("thread_rng has catastrophically low entropy");
-        }
-    };
-    
-    if retries > 0 {
-        let unlikeliness = 8 * SESSION_TOKEN_BYTES * retries;
-        log::warn!("Session token generated with {retries} retry(s); thread_rng probably has low entropy, as otherwise this event has probability 2^-{unlikeliness}");
-    }
+    thread_rng().fill(&mut bytes);
+    let raw = base64_encode(&bytes);
+    let hash = token_hash(raw.as_str());
     
     (raw, hash)
 }
@@ -119,17 +93,16 @@ mod test {
     
     #[test]
     fn test_token_hash() {
-        let (raw, hash) = generate_session_token(|_| true);
+        let (raw, hash) = generate_session_token();
         
         assert_eq!(hash, token_hash(raw.as_str()), "Hash of raw token should equal the generated hash");
     }
     
     #[test]
-    fn test_tokens_distinct() {
-        let (raw1, hash1) = generate_session_token(|_| true);
-        let (raw2, hash2) = generate_session_token(|h| h != hash1.as_str());
+    fn test_hash_distinct() {
+        let hash1 = token_hash("example");
+        let hash2 = token_hash("something else");
         
-        assert_ne!(raw1, raw2, "Raw tokens should be distinct");
-        assert_ne!(hash1, hash2, "Hashed tokens should be distinct");
+        assert_ne!(hash1, hash2, "Hashes should be distinct");
     }
 }
