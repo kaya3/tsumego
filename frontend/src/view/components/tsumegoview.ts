@@ -1,4 +1,11 @@
 class TsumegoView extends BoardView {
+    public static EMPTY_TSUMEGO = Tsumego.fromJSONObject({
+        board: Board.empty(9).toString(),
+        tree: 'lose',
+    });
+    
+    public tsumego: Tsumego;
+    
     /**
      * Wait this long, in milliseconds, between the player's move and the
      * opponent's response.
@@ -7,14 +14,11 @@ class TsumegoView extends BoardView {
     
     private readonly onCompleteCallbacks: ((win: boolean) => void)[] = [];
     
-    public constructor(
-        public tsumego: Tsumego,
-    ) {
-        if(tsumego.board.nextPlayer() !== 'b') {
-            throw new Error('TsumegoView must be initialised with black to play');
-        }
-        
+    public constructor(tsumego?: Tsumego) {
+        tsumego ??= TsumegoView.EMPTY_TSUMEGO;
         super(tsumego.board);
+        
+        this.tsumego = tsumego;
         this.playEnabled = !tsumego.isComplete();
         
         this.onPlay((row, col) => {
@@ -40,6 +44,11 @@ class TsumegoView extends BoardView {
                 callback(win);
             }
         }
+    }
+    
+    public clear(): void {
+        this.tsumego = TsumegoView.EMPTY_TSUMEGO;
+        this.playEnabled = false;
     }
     
     public onComplete(callback: (win: boolean) => void): void {

@@ -31,7 +31,7 @@ class BoardView {
         const canvas = this.canvas = document.createElement('canvas');
         canvas.width = BoardView.CANVAS_SIZE;
         canvas.height = BoardView.CANVAS_SIZE;
-        this.ctx = canvas.getContext('2d')!;
+        this.ctx = canvas.getContext('2d') ?? fail(`failed to get 2D canvas context`);
         
         canvas.addEventListener('mouseenter', e => this.onHover(e));
         canvas.addEventListener('mousemove', e => this.onHover(e));

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tsumego Practice</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <noscript>You must have JavaScript enabled for this application to function correctly.</noscript>
+    
+    <div id="logged_in_header" class="header hidden">
+        <button id="logout_button">Log Out</button>
+    </div>
+    
+    <div id="login_page" class="page hidden">
+        <div style="display: flex; flex-direction: column; align-items: center;">
+            <form id="login_form">
+                <div style="display: flex; flex-direction: row;">
+                    <label for="login_email">Email:</label>
+                    <input id="login_email" name="email">
+                </div>
+                <div style="display: flex; flex-direction: row;">
+                    <label for="login_password">Password:</label>
+                    <input id="login_password" name="password" type="password">
+                </div>
+                <div style="display: flex; flex-direction: row; align-items: center;">
+                    <input id="login_submit" type="submit" value="Log In">
+                </div>
+                <div id="login_message"></div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="attempt_tsumego_page" class="page hidden">
+    </div>
+    
+    <script src="/app.js"></script>
+    <script type="text/javascript">
+    new App().main();
+    </script>
+</body>
+</html>
