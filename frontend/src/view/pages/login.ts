@@ -1,7 +1,8 @@
 ///<reference path="page.ts"/>
 
 namespace Pages {
-    export class LoginPage extends Page<void> {
+    export class LoginPage extends Page<{email: string | null | undefined}> {
+        private readonly form: HTMLFormElement;
         private readonly email: HTMLInputElement;
         private readonly password: HTMLInputElement;
         private readonly submitButton: HTMLInputElement;
@@ -10,6 +11,7 @@ namespace Pages {
         public constructor(app: App) {
             super(app, 'login_page');
             
+            this.form = expectElementById('login_form', 'form');
             this.email = expectElementById('login_email', 'input');
             this.password = expectElementById('login_password', 'input');
             this.submitButton = expectElementById('login_submit', 'input');
@@ -17,7 +19,9 @@ namespace Pages {
         }
         
         protected hydrate(): void {
-            this.submitButton.addEventListener('click', async e => {
+            this.form.addEventListener('submit', async e => {
+                e.preventDefault();
+                
                 this.submitButton.disabled = true;
                 
                 const email = this.email.value;
@@ -36,14 +40,16 @@ namespace Pages {
                     this.submitButton.disabled = false;
                 }
                 
-                e.preventDefault();
                 return false;
             });
         }
         
-        protected onShow(): void {
+        protected onShow(params: {email: string | null | undefined}): void {
+            this.email.value = params.email ?? '';
             this.submitButton.disabled = false;
             this.app.loggedInHeader.hide();
+            
+            (params.email ? this.password : this.email).focus();
         }
         
         protected onHide(): void {

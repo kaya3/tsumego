@@ -17,5 +17,5 @@ Cargo.lock
 # Build
 frontend/out/
 backend/target/
-backend/static/
+backend/static/app.js
 problems/*.sql

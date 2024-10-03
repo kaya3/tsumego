@@ -9,7 +9,13 @@ class App {
     
     public setCurrentUser(user: User | null): void {
         this.currentUser = user;
+        
         if(user) {
+            // Remember the user's email address for next time they log in
+            try {
+                localStorage.setItem('userEmail', user.email);
+            } catch(_ignored) {}
+            
             this.loggedInHeader.show(user);
         } else {
             this.loggedInHeader.hide();
@@ -18,12 +24,17 @@ class App {
     
     public async main() {
         const user = await API.whoAmI();
-        this.currentUser = user;
+        this.setCurrentUser(user);
         
         if(!user) {
-            this.loginPage.show();
+            // Populate the login form with the previously-used email address
+            let email: string | null = null;
+            try {
+                email = localStorage.getItem('userEmail');
+            } catch(_ignored) {}
+            
+            this.loginPage.show({email});
         } else {
-            this.loggedInHeader.show(user);
             await this.attemptTsumegoPage.fetchAndShow();
         }
     }

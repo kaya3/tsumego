@@ -1,0 +1,47 @@
+body {
+    margin: 0;
+    padding: 0;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.header, .page {
+    padding: 1em;
+}
+
+.row {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-self: stretch;
+    gap: 0.5em;
+}
+
+.column {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.page {
+    flex-grow: 1;
+}
+
+#login_page {
+    max-width: 20em;
+}
+
+#login_form label {
+    flex-grow: 1;
+}
+#login_submit {
+    padding: 1em;
+}
+#login_message {
+    color: red;
+}
