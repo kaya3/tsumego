@@ -6,7 +6,8 @@ use crate::result::Result;
 /// Declares routes for serving static content.
 pub fn declare_routes(conf: &mut web::ServiceConfig) {
     conf.service(index)
-        .service(tsumego_js);
+        .service(app_js)
+        .service(style_css);
 }
 
 #[get("/")]
@@ -14,7 +15,12 @@ async fn index() -> Result<impl Responder> {
     Ok(NamedFile::open_async("static/index.html").await?)
 }
 
-#[get("/out/tsumego.js")]
-async fn tsumego_js() -> Result<impl Responder> {
-    Ok(NamedFile::open_async("static/tsumego.js").await?)
+#[get("/app.js")]
+async fn app_js() -> Result<impl Responder> {
+    Ok(NamedFile::open_async("static/app.js").await?)
+}
+
+#[get("/style.css")]
+async fn style_css() -> Result<impl Responder> {
+    Ok(NamedFile::open_async("static/style.css").await?)
 }

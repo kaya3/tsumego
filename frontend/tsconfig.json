@@ -2,7 +2,7 @@
     "compileOnSave": true,
     "compilerOptions": {
         "strict": true,
-        "outFile": "out/tsumego.js",
+        "outFile": "out/app.js",
         "target": "ESNext",
         "lib": ["ESNext", "DOM"],
         "declaration": true,
