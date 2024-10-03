@@ -12,10 +12,6 @@ button, input[type="submit"] {
     padding: 0.5em;
 }
 
-.hidden {
-    display: none !important;
-}
-
 .row {
     display: flex;
     flex-direction: row;

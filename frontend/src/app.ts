@@ -13,6 +13,7 @@ class App {
         
         if(user) {
             // Remember the user's email address for next time they log in
+            // It's OK if this fails, so just catch and suppress
             try {
                 localStorage.setItem('userEmail', user.email);
             } catch(_ignored) {}
@@ -27,16 +28,17 @@ class App {
         const user = await API.whoAmI();
         this.setCurrentUser(user);
         
-        if(!user) {
+        if(user) {
+            this.mainMenuPage.show(user);
+        } else {
             // Populate the login form with the previously-used email address
+            // It's OK if this fails, so just catch and suppress
             let email: string | null = null;
             try {
                 email = localStorage.getItem('userEmail');
             } catch(_ignored) {}
             
             this.loginPage.show({email});
-        } else {
-            this.mainMenuPage.show(user);
         }
     }
 }
