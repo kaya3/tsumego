@@ -33,6 +33,8 @@ async fn main() -> std::io::Result<()> {
         .app_data(state.clone())
         .configure(routes::declare_routes)
         .wrap(actix_web::middleware::from_fn(middleware::auth_middleware))
+        // CSRF protection is the outer-most wrapper, so it applies before
+        // we authenticate the user
         .wrap(actix_web::middleware::from_fn(middleware::csrf_middleware))
         .wrap(Logger::default())
     )

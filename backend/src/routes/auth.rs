@@ -42,7 +42,7 @@ async fn login(state: State, request: HttpRequest, form: web::Form<LoginForm>) -
             // Same response for "no such user" as for "invalid password", to
             // avoid leaking information about which email addresses have
             // registered accounts
-            Err(AppError::Unauthorised)
+            Err(AppError::UNAUTHORIZED)
         },
     }
 }
@@ -60,6 +60,6 @@ async fn logout(state: State, request: HttpRequest, auth: MaybeAuth) -> Result<i
 }
 
 #[get("/api/who_am_i")]
-async fn who_am_i(auth: MaybeAuth) -> Result<impl Responder> {
-    Ok(HttpResponse::Ok().json(auth.user()))
+async fn who_am_i(auth: MaybeAuth) -> impl Responder {
+    HttpResponse::Ok().json(auth.user())
 }

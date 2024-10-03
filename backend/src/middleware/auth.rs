@@ -1,18 +1,15 @@
 use actix_web::{
     body::MessageBody,
     cookie::{time::Duration, Cookie, SameSite},
-    dev::{Payload, ServiceRequest, ServiceResponse},
+    dev::{ServiceRequest, ServiceResponse},
     http::header::{HeaderName, HeaderValue},
     middleware::Next,
     Error,
-    FromRequest,
-    HttpMessage,
-    HttpRequest,
 };
 
 use crate::{
     auth::{AuthTokenAction, MaybeAuth},
-    result::{AppError, Result},
+    result::Result,
     state::State,
 };
 
@@ -53,51 +50,33 @@ pub async fn auth_middleware(
     // Issue or revoke the cookie, if necessary. If an action is inserted into
     // the request object, perform that action; otherwise perform the action
     // indicated by the earlier call to `authenticate_by_session_token`.
+    let cookie_name = &state.cfg.session_token_cookie_name;
     match AuthTokenAction::take_from_request(response.request(), token_action) {
         AuthTokenAction::Issue(token) => {
             // Issue a cookie with the appropriate attributes
             // https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#cookies
-            let mut cookie = Cookie::new(state.cfg.session_token_cookie_name.clone(), token);
+            let mut cookie = Cookie::new(cookie_name.clone(), token);
             
-            // HTTP-only means the cookie is not visible to client-side JavaScript
+            // HTTP-only cookies are not visible to client-side JavaScript
             cookie.set_http_only(true);
             // Only send this cookie over HTTPS connections
             cookie.set_secure(true);
-            // The client should only send this cookie when making requests from the same site
+            // The client should only send this cookie when making requests
+            // from the same site
             cookie.set_same_site(SameSite::Strict);
-            cookie.set_max_age(Duration::days(state.cfg.session_duration_days));
+            
+            let duration_days = state.cfg.session_duration_days;
+            cookie.set_max_age(Duration::days(duration_days));
             
             response.response_mut().add_cookie(&cookie)?;
-        }
+        },
         AuthTokenAction::Revoke => {
             // Revoke cookie by setting new empty cookie of the same name
-            let cookie = Cookie::new(state.cfg.session_token_cookie_name.clone(), "");
+            let cookie = Cookie::new(cookie_name.clone(), "");
             response.response_mut().add_removal_cookie(&cookie)?;
-        }
-        AuthTokenAction::DoNothing => {}
+        },
+        AuthTokenAction::DoNothing => {},
     }
     
     Ok(response)
-}
-
-impl MaybeAuth {
-    fn get_from_request(request: &HttpRequest) -> MaybeAuth {
-        request.extensions()
-            .get::<MaybeAuth>()
-            .cloned()
-            .unwrap_or(MaybeAuth::Unauthenticated)
-    }
-}
-
-impl FromRequest for MaybeAuth {
-    type Error = AppError;
-    type Future = std::future::Ready<Result<Self>>;
-    
-    fn from_request(
-        request: &HttpRequest,
-        payload: &mut Payload,
-    ) -> Self::Future {
-        let user = MaybeAuth::get_from_request(request);
-        std::future::ready(Ok(user))
-    }
 }

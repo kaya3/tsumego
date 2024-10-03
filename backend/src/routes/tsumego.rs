@@ -8,7 +8,7 @@ use serde_json::json;
 
 use crate::{
     model::Tsumego,
-    result::{AppError, Result},
+    result::{OrAppError, Result},
     state::State,
 };
 
@@ -21,12 +21,10 @@ pub fn declare_routes(conf: &mut web::ServiceConfig) {
 #[get("/api/problem/{id}")]
 async fn get_tsumego(state: State, id: web::Path<i64>) -> Result<impl Responder> {
     let tsumego = Tsumego::get_by_id(&state, *id)
-        .await?;
+        .await?
+        .or_404_not_found()?;
     
-    match tsumego {
-        Some(tsumego) => Ok(HttpResponse::Ok().json(tsumego)),
-        _ => Err(AppError::NotFound),
-    }
+    Ok(HttpResponse::Ok().json(tsumego))
 }
 
 #[get("/api/all_problems")]

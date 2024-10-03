@@ -15,9 +15,14 @@ use crate::{
 /// is based on inspecting the Referer and Sec-Fetch-Site request headers; this
 /// isn't always as good as token-based CSRF protection, but
 /// 
-/// - This application doesn't have any risk of open redirect vulnerabilities,
+/// - This application doesn't have any risk of open redirect vulnerabilities.
 /// - Almost every browser does send a Referer header for same-origin POST and
 ///   DELETE requests.
+/// - This application will only be accessed via HTTPS, so the Referer header
+///   cannot be removed by a proxy.
+/// 
+/// Additional protection is also given by the Same-Site attribute for the
+/// session token cookie.
 pub async fn csrf_middleware(
     request: ServiceRequest,
     next: Next<impl MessageBody>,
@@ -26,9 +31,10 @@ pub async fn csrf_middleware(
     // allowed to change application state, so we want to ensure the request
     // isn't cross-site.
     if !request.method().is_safe() && is_bad_request(&request) {
-        return Err(AppError::BadRequest.into());
+        return Err(AppError::BAD_REQUEST.into());
     }
     
+    // Otherwise, forward to the wrapped handler
     next.call(request).await
 }
 
@@ -47,7 +53,7 @@ fn is_bad_request(request: &ServiceRequest) -> bool {
         return true;
     }
     
-    // If Sec-Fetch-Site exists, it must not be 'cross-origin'
+    // If Sec-Fetch-Site exists, it must not be 'cross-site'
     let sec_fetch_site = request.headers().get("Sec-Fetch-Site");
     
     if matches!(sec_fetch_site, Some(r) if r.to_str().is_ok_and(|r| r == "cross-site")) {
@@ -55,5 +61,5 @@ fn is_bad_request(request: &ServiceRequest) -> bool {
         return true;
     }
     
-    return false;
+    false
 }

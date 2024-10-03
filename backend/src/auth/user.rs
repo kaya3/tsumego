@@ -1,23 +1,7 @@
-use actix_web::HttpMessage;
+use actix_web::{dev::Payload, FromRequest, HttpMessage, HttpRequest};
 
-use crate::{model::{Session, User}, result::Result, state::State};
+use crate::{model::{Session, User}, result::{AppError, Result}, state::State};
 use super::{hashing, AuthTokenAction};
-
-/// Represents either an authenticated user, or that the current user is not
-/// authenticated. Equivalent to an `Option` of `(user, session_id)`, but Rust
-/// doesn't allow implementing third-party traits like `actix_web::FromRequest`
-/// for built-in types like `Option`.
-#[derive(Clone)]
-pub enum MaybeAuth {
-    Authenticated {user: User, session_id: i64},
-    Unauthenticated,
-}
-
-impl From<MaybeAuth> for Option<User> {
-    fn from(auth: MaybeAuth) -> Self {
-        auth.user()
-    }
-}
 
 impl User {
     pub async fn check_password(&self, state: &State, given_password: &str) -> Result<bool> {
@@ -41,6 +25,13 @@ impl MaybeAuth {
     pub fn insert_into_request(self, request: &impl HttpMessage) {
         request.extensions_mut()
             .insert(self);
+    }
+    
+    pub fn get_from_request(request: &HttpRequest) -> Self {
+        request.extensions()
+            .get::<Self>()
+            .cloned()
+            .unwrap_or(Self::Unauthenticated)
     }
     
     pub async fn authenticate_by_session_token(state: &State, token: &str) -> Result<(Self, AuthTokenAction)> {
@@ -89,5 +80,34 @@ impl MaybeAuth {
             session_id: session.id,
         };
         Ok((auth, token_action))
+    }
+}
+
+/// Represents either an authenticated user, or that the current user is not
+/// authenticated. Equivalent to an `Option` of `(user, session_id)`, but Rust
+/// doesn't allow implementing third-party traits like `actix_web::FromRequest`
+/// for built-in types like `Option`.
+#[derive(Clone)]
+pub enum MaybeAuth {
+    Authenticated {user: User, session_id: i64},
+    Unauthenticated,
+}
+
+impl From<MaybeAuth> for Option<User> {
+    fn from(auth: MaybeAuth) -> Self {
+        auth.user()
+    }
+}
+
+impl FromRequest for MaybeAuth {
+    type Error = AppError;
+    type Future = std::future::Ready<Result<Self>>;
+    
+    fn from_request(
+        request: &HttpRequest,
+        payload: &mut Payload,
+    ) -> Self::Future {
+        let user = MaybeAuth::get_from_request(request);
+        std::future::ready(Ok(user))
     }
 }

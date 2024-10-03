@@ -20,9 +20,18 @@ impl Session {
         Ok(())
     }
     
+    pub async fn revoke_all_expired(state: &State) -> Result<()> {
+        log::info!("Revoking expired sessions");
+        sqlx::query!("DELETE FROM sessions WHERE expires <= datetime('now')")
+            .execute(&state.db)
+            .await?;
+        
+        Ok(())
+    }
     
-    /// Generates a new session token for the given user, and inserts it into
-    /// the database. This function should be called on a successful login.
+    /// Generates a new session token for the given user, and inserts the
+    /// session into the database. This function should be called on a
+    /// successful login.
     pub async fn begin_for_user(state: &State, user_id: i64) -> Result<String> {
         let (token, hash) = generate_new_token(state)
             .await?;
