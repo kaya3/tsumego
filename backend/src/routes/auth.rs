@@ -1,13 +1,14 @@
 use actix_web::{
-    get, post, web, HttpRequest, HttpResponse, Responder
+    get, post, web::{ServiceConfig, Json}, HttpRequest, HttpResponse, Responder
 };
+use serde_json::json;
 
 use crate::{
     auth::{AuthTokenAction, MaybeAuth}, model::{Session, User}, result::{AppError, Result}, state::State
 };
 
 /// Declares routes for login/logout and other authentication actions.
-pub fn declare_routes(conf: &mut web::ServiceConfig) {
+pub fn declare_routes(conf: &mut ServiceConfig) {
     conf.service(login)
         .service(logout)
         .service(who_am_i);
@@ -17,7 +18,7 @@ pub fn declare_routes(conf: &mut web::ServiceConfig) {
 struct LoginForm {email: String, password: String}
 
 #[post("/api/login")]
-async fn login(state: State, request: HttpRequest, form: web::Form<LoginForm>) -> Result<impl Responder> {
+async fn login(state: State, request: HttpRequest, form: Json<LoginForm>) -> Result<impl Responder> {
     let user = User::get_by_email(&state, &form.email)
         .await?;
     
@@ -31,9 +32,7 @@ async fn login(state: State, request: HttpRequest, form: web::Form<LoginForm>) -
             AuthTokenAction::Issue(token)
                 .insert_into_request(&request);
             
-            // Empty response body, as the frontend only needs to check the
-            // response's status code
-            Ok(HttpResponse::Ok())
+            Ok(HttpResponse::Ok().json(json!(user)))
         },
         user => {
             let reason = if user.is_some() {"invalid password"} else {"no such user"};

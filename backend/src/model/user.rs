@@ -6,7 +6,9 @@ use crate::{
 pub struct User {
     pub id: i64,
     pub email: String,
+    #[serde(rename = "displayName")]
     pub display_name: String,
+    #[serde(rename = "isAdmin")]
     pub is_admin: bool,
 }
 
