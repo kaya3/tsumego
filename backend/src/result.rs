@@ -33,7 +33,7 @@ impl ResponseError for AppError {
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
-
+    
     fn error_response(&self) -> HttpResponse<BoxBody> {
         let reason = format!("{self}");
         HttpResponse::new(self.status_code())

@@ -1,6 +1,6 @@
 use actix_web::{dev::Payload, FromRequest, HttpMessage, HttpRequest};
 
-use crate::{model::{Session, User}, result::{AppError, Result}, state::State};
+use crate::{model::{Session, User}, result::{AppError, OrAppError, Result}, state::State};
 use super::{hashing, AuthTokenAction};
 
 impl User {
@@ -103,11 +103,21 @@ impl FromRequest for MaybeAuth {
     type Error = AppError;
     type Future = std::future::Ready<Result<Self>>;
     
-    fn from_request(
-        request: &HttpRequest,
-        payload: &mut Payload,
-    ) -> Self::Future {
-        let user = MaybeAuth::get_from_request(request);
-        std::future::ready(Ok(user))
+    fn from_request(request: &HttpRequest, _payload: &mut Payload) -> Self::Future {
+        let auth = MaybeAuth::get_from_request(request);
+        std::future::ready(Ok(auth))
+    }
+}
+
+impl FromRequest for User {
+    type Error = AppError;
+    type Future = std::future::Ready<Result<Self>>;
+    
+    fn from_request(request: &HttpRequest, _payload: &mut Payload) -> Self::Future {
+        let result = MaybeAuth::get_from_request(request)
+            .user()
+            .or_401_unauthorised();
+        
+        std::future::ready(result)
     }
 }
