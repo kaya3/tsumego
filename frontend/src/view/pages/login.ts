@@ -1,7 +1,7 @@
 ///<reference path="page.ts"/>
 
 namespace Pages {
-    export class LoginPage extends Page<{email: string | null | undefined}> {
+    export class LoginForm extends Page<{email: string | null | undefined}> {
         private readonly form: HTMLFormElement;
         private readonly email: HTMLInputElement;
         private readonly password: HTMLInputElement;
@@ -32,9 +32,9 @@ namespace Pages {
                     // This also shows the header
                     this.app.setCurrentUser(user);
                     
-                    // Go to tsumego attempt page
+                    // Go to main menu
                     this.hide();
-                    await this.app.attemptTsumegoPage.fetchAndShow();
+                    this.app.mainMenuPage.show(user);
                 } else {
                     this.message.innerText = 'Incorrect email or password';
                     this.submitButton.disabled = false;

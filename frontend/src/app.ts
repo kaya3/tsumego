@@ -1,7 +1,8 @@
 class App {
     public readonly loggedInHeader = new LoggedInHeader(this);
     
-    public readonly loginPage = new Pages.LoginPage(this);
+    public readonly loginPage = new Pages.LoginForm(this);
+    public readonly mainMenuPage = new Pages.MainMenu(this);
     public readonly attemptTsumegoPage = new Pages.AttemptTsumego(this);
     
     public currentPage: {hide(): void} | null = null;
@@ -35,7 +36,7 @@ class App {
             
             this.loginPage.show({email});
         } else {
-            await this.attemptTsumegoPage.fetchAndShow();
+            this.mainMenuPage.show(user);
         }
     }
 }
