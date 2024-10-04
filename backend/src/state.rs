@@ -26,6 +26,8 @@ pub struct Config {
     pub session_token_cookie_name: CowStr,
     pub session_duration_days: i64,
     pub session_renew_after_days: i64,
+    
+    pub srs_interval_fuzz_factor: f64,
 }
 
 /// Loads the initial application state from the environment variables

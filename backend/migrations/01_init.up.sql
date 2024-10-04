@@ -27,11 +27,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS tsumego_name_unique on tsumego (name);
 
 CREATE TABLE IF NOT EXISTS user_tsumego_stats (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    user_id INTEGER NOT NULL REFERENCES user (id),
+    user_id INTEGER NOT NULL REFERENCES users (id),
     tsumego_id INTEGER NOT NULL REFERENCES tsumego (id),
-    in_rotation BOOLEAN NOT NULL,
     last_review_date DATETIME NOT NULL,
-    review_due DATETIME NOT NULL,
+    review_due DATETIME,
     num_reviews INTEGER NOT NULL,
     streak_length INTEGER NOT NULL,
     interval FLOAT NOT NULL,

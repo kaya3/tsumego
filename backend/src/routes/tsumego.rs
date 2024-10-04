@@ -1,6 +1,6 @@
 use actix_web::{
     get,
-    web,
+    web::{Path, ServiceConfig},
     HttpResponse,
     Responder,
 };
@@ -13,13 +13,13 @@ use crate::{
 };
 
 /// Declares routes for fetching Tsumego data.
-pub fn declare_routes(conf: &mut web::ServiceConfig) {
+pub fn declare_routes(conf: &mut ServiceConfig) {
     conf.service(get_tsumego)
         .service(all_tsumego);
 }
 
 #[get("/api/problem/{id}")]
-async fn get_tsumego(state: State, id: web::Path<i64>) -> Result<impl Responder> {
+async fn get_tsumego(state: State, id: Path<i64>) -> Result<impl Responder> {
     let tsumego = Tsumego::get_by_id(&state, *id)
         .await?
         .or_404_not_found()?;
