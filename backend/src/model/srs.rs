@@ -123,6 +123,8 @@ impl SrsState {
                     _ => 0.25,
                 };
                 
+                // TODO: also need an "earliness penalty"
+                
                 let inv_score = 3.0 - (grade as usize as f64);
                 let e_factor = previous.e_factor + (0.1 - inv_score * (0.08 + inv_score * 0.02));
                 let working_e_factor = e_factor + match grade {

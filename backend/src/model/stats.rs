@@ -87,6 +87,10 @@ impl UserTsumegoStats {
         Ok(stats)
     }
     
+    pub fn is_in_rotation(&self) -> bool {
+        self.review_due.is_some()
+    }
+    
     pub async fn update_on_review(state: &State, user_id: i64, tsumego_id: i64, grade: Grade) -> Result<Self> {
         let now = chrono::Utc::now().naive_utc();
         
@@ -106,8 +110,9 @@ impl UserTsumegoStats {
             },
         };
         
-        let review_due = if matches!(stats, Some(Self {review_due: None, ..})) {
-            // Don't set a new due date if this tsumego is out of rotation
+        let review_due = if stats.as_ref().is_some_and(|s| !s.is_in_rotation()) {
+            // This tsumego is out of rotation for this user; don't set a new
+            // due date
             None
         } else {
             // Add random fuzz to the interval. This prevents "bunching up";
@@ -115,12 +120,12 @@ impl UserTsumegoStats {
             // prompted together in the future.
             let fuzz_factor = state.cfg.srs_interval_fuzz_factor;
             let fuzz_range = (1.0 - fuzz_factor)..(1.0 + fuzz_factor);
-            let fuzz: f64 = rand::thread_rng().gen_range(fuzz_range);
+            let fuzz = rand::thread_rng().gen_range(fuzz_range);
             
             Some(add_days(now, srs_state.interval * fuzz))
         };
         
-        let id = sqlx::query_scalar!("INSERT OR REPLACE INTO user_tsumego_stats (user_id, tsumego_id, last_review_date, review_due, streak_length, interval, e_factor) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id", user_id, tsumego_id, now, review_due, srs_state.streak_length, srs_state.interval, srs_state.e_factor)
+        let id = sqlx::query_scalar!("INSERT OR REPLACE INTO user_tsumego_stats (user_id, tsumego_id, last_review_date, review_due, num_reviews, streak_length, interval, e_factor) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id", user_id, tsumego_id, now, review_due, srs_state.num_reviews, srs_state.streak_length, srs_state.interval, srs_state.e_factor)
             .fetch_one(&state.db)
             .await?;
         
@@ -154,5 +159,5 @@ fn add_days(from: chrono::NaiveDateTime, delta_days: f64) -> chrono::NaiveDateTi
 
 fn delta_days(from: chrono::NaiveDateTime, to: chrono::NaiveDateTime) -> f64 {
     let delta_seconds = (to - from).num_seconds();
-    (delta_seconds as f64) * SECONDS_PER_DAY
+    (delta_seconds as f64) / SECONDS_PER_DAY
 }

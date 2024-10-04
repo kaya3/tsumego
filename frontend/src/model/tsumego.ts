@@ -1,3 +1,10 @@
+interface TsumegoData {
+    readonly id: number;
+    readonly name: string;
+    readonly board: string,
+    readonly tree: VariationTree;
+}
+
 type VariationTree =
     | 'win'
     | 'lose'

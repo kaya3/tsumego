@@ -35,7 +35,13 @@ impl ResponseError for AppError {
     }
     
     fn error_response(&self) -> HttpResponse<BoxBody> {
+        // Display the full error in a debug build, but just the status in a
+        // release build
+        #[cfg(debug)]
+        let reason = format!("{self:?}");
+        #[cfg(not(debug))]
         let reason = format!("{self}");
+        
         HttpResponse::new(self.status_code())
             .set_body(MessageBody::boxed(reason))
     }

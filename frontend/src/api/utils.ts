@@ -16,4 +16,8 @@ namespace API {
         
         return await fetch(endpoint, request);
     }
+    
+    export async function reportError(message: string, response: Response): Promise<void> {
+        console.error(`${message}: ${await response.text()}`);
+    }
 }
