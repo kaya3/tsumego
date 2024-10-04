@@ -24,3 +24,15 @@ CREATE TABLE IF NOT EXISTS tsumego (
     tree VARCHAR NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS tsumego_name_unique on tsumego (name);
+
+CREATE TABLE IF NOT EXISTS user_tsumego_stats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES user (id),
+    tsumego_id INTEGER NOT NULL REFERENCES tsumego (id),
+    in_rotation BOOLEAN NOT NULL,
+    review_due DATETIME NOT NULL,
+    streak_length INTEGER NOT NULL,
+    interval FLOAT NOT NULL,
+    e_factor FLOAT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS tsumego_stats_per_user_unique on user_tsumego_stats (user_id, tsumego_id);

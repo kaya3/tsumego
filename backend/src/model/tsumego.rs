@@ -10,6 +10,8 @@ pub struct Tsumego {
     pub id: i64,
     pub name: String,
     pub board: String,
+    // This field has to be of type `JsonValue` instead of `String`, so that it
+    // doesn't get an extra pair of quotes when a `Tsumego` is serialised.
     pub tree: JsonValue,
 }
 
