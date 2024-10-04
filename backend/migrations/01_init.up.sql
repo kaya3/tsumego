@@ -30,7 +30,9 @@ CREATE TABLE IF NOT EXISTS user_tsumego_stats (
     user_id INTEGER NOT NULL REFERENCES user (id),
     tsumego_id INTEGER NOT NULL REFERENCES tsumego (id),
     in_rotation BOOLEAN NOT NULL,
+    last_review_date DATETIME NOT NULL,
     review_due DATETIME NOT NULL,
+    num_reviews INTEGER NOT NULL,
     streak_length INTEGER NOT NULL,
     interval FLOAT NOT NULL,
     e_factor FLOAT NOT NULL

@@ -10,6 +10,8 @@ pub struct UserTsumegoStats {
     tsumego_id: i64,
     #[serde(rename = "inRotation")]
     in_rotation: bool,
+    #[serde(rename = "lastReviewDate")]
+    last_review_date: chrono::NaiveDateTime,
     #[serde(rename = "reviewDue")]
     review_due: chrono::NaiveDateTime,
     #[serde(rename = "srsState")]
@@ -28,7 +30,9 @@ struct FlatStats {
     user_id: i64,
     tsumego_id: i64,
     in_rotation: bool,
+    last_review_date: chrono::NaiveDateTime,
     review_due: chrono::NaiveDateTime,
+    num_reviews: i64,
     streak_length: i64,
     interval: f64,
     e_factor: f64,
@@ -41,8 +45,10 @@ impl From<FlatStats> for UserTsumegoStats {
             user_id: flat.user_id,
             tsumego_id: flat.tsumego_id,
             in_rotation: flat.in_rotation,
+            last_review_date: flat.last_review_date,
             review_due: flat.review_due,
             srs_state: SrsState {
+                num_reviews: flat.num_reviews,
                 streak_length: flat.streak_length,
                 interval: flat.interval,
                 e_factor: flat.e_factor,
