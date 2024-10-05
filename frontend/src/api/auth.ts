@@ -3,7 +3,7 @@ namespace API {
     const LOGOUT_ENDPOINT = '/api/logout';
     const WHO_AM_I_ENDPOINT = '/api/who_am_i';
     
-    export async function login(email: string, password: string): Promise<User | null> {
+    export async function login(email: string, password: string): Promise<UserDetails | null> {
         const response = await post(LOGIN_ENDPOINT, {email, password});
         
         if(response.ok) {
@@ -25,7 +25,7 @@ namespace API {
         }
     }
     
-    export async function whoAmI(): Promise<User | null> {
+    export async function whoAmI(): Promise<UserDetails | null> {
         const response = await fetch(WHO_AM_I_ENDPOINT);
         
         if(response.ok) {

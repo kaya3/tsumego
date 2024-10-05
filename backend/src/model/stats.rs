@@ -94,6 +94,12 @@ impl UserTsumegoStats {
     pub async fn update_on_review(state: &State, user_id: i64, tsumego_id: i64, grade: Grade) -> Result<Self> {
         let now = time::now();
         
+        // Insert a record of this review.
+        sqlx::query!("INSERT INTO user_tsumego_reviews (user_id, tsumego_id, review_date, grade) VALUES (?, ?, ?, ?)", user_id, tsumego_id, now, grade)
+            .execute(&state.db)
+            .await?;
+        
+        // Insert or update statistics for this tsumego.
         let stats = Self::get(state, user_id, tsumego_id)
             .await?;
         

@@ -30,7 +30,7 @@ class LoggedInHeader {
         });
     }
     
-    public show(user: User): void {
+    public show(user: UserDetails): void {
         this.header.classList.remove('hidden');
         this.username.innerText = user.displayName;
         this.logoutButton.disabled = false;

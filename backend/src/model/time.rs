@@ -21,3 +21,12 @@ pub fn delta_days(from: DateTime, to: DateTime) -> f64 {
     let delta_seconds = (to - from).num_seconds();
     (delta_seconds as f64) / SECONDS_PER_DAY
 }
+
+/// Returns the time at the start of the given day.
+pub fn start_of_day(time: DateTime) -> DateTime {
+    // Possible feature for later: make days tick over at a time based on the
+    // user's preferences
+    time.date()
+        .and_hms_opt(0, 0, 0)
+        .expect("00:00:00 is a valid time on any day")
+}

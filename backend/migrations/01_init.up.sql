@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS tsumego (
     board VARCHAR NOT NULL,
     tree VARCHAR NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS tsumego_name_unique on tsumego (name);
+CREATE UNIQUE INDEX IF NOT EXISTS tsumego_name_unique ON tsumego (name);
 
 CREATE TABLE IF NOT EXISTS user_tsumego_stats (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -36,4 +36,15 @@ CREATE TABLE IF NOT EXISTS user_tsumego_stats (
     interval FLOAT NOT NULL,
     e_factor FLOAT NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS tsumego_stats_per_user_unique on user_tsumego_stats (user_id, tsumego_id);
+CREATE UNIQUE INDEX IF NOT EXISTS tsumego_stats_per_user_unique ON user_tsumego_stats (user_id, tsumego_id);
+CREATE INDEX IF NOT EXISTS tsumego_stats_by_due_date ON user_tsumego_stats (review_due);
+
+CREATE TABLE IF NOT EXISTS user_tsumego_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users (id),
+    tsumego_id INTEGER NOT NULL REFERENCES tsumego (id),
+    review_date DATETIME NOT NULL,
+    grade INTEGER CHECK(grade BETWEEN 0 AND 3) NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS tsumego_reviews_per_user_unique ON user_tsumego_reviews (user_id, tsumego_id);
+CREATE INDEX IF NOT EXISTS tsumego_reviews_by_date ON user_tsumego_reviews (review_date);

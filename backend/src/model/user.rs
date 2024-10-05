@@ -1,5 +1,5 @@
 use crate::{
-    result::Result, state::State
+    model::time, result::Result, state::State
 };
 
 #[derive(Clone, serde::Serialize, sqlx::FromRow)]
@@ -48,5 +48,37 @@ impl User {
             .await?;
         
         Ok(users)
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct UserDetails {
+    #[serde(flatten)]
+    pub user: User,
+    #[serde(rename = "reviewsDueToday")]
+    pub reviews_due_today: i64,
+    #[serde(rename = "reviewsDoneToday")]
+    pub reviews_done_today: i64,
+}
+
+impl UserDetails {
+    pub async fn get_for_user(state: &State, user: User) -> Result<Self> {
+        let now = time::now();
+        let start_of_day = time::start_of_day(now);
+        
+        struct Details {
+            due_today: Option<i32>,
+            done_today: Option<i32>,
+        }
+        
+        let details = sqlx::query_as!(Details, "SELECT (SELECT COUNT(1) FROM user_tsumego_stats WHERE user_id = ? AND review_due <= ?) as due_today, (SELECT COUNT(1) from user_tsumego_reviews WHERE user_id = ? AND review_date >= ?) as done_today", user.id, now, user.id, start_of_day)
+            .fetch_one(&state.db)
+            .await?;
+        
+        Ok(Self {
+            user,
+            reviews_due_today: 5,//details.due_today.unwrap_or(0) as i64,
+            reviews_done_today: 3,//details.done_today.unwrap_or(0) as i64,
+        })
     }
 }

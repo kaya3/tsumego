@@ -1,10 +1,9 @@
 use actix_web::{
     get, post, web::{ServiceConfig, Json}, HttpRequest, HttpResponse, Responder
 };
-use serde_json::json;
 
 use crate::{
-    auth::{AuthTokenAction, MaybeAuth}, model::{Session, User}, result::{AppError, Result}, state::State
+    auth::{AuthTokenAction, MaybeAuth}, model::{Session, User, UserDetails}, result::{AppError, Result}, state::State
 };
 
 /// Declares routes for login/logout and other authentication actions.
@@ -32,7 +31,9 @@ async fn login(state: State, request: HttpRequest, form: Json<LoginForm>) -> Res
             AuthTokenAction::Issue(token)
                 .insert_into_request(&request);
             
-            Ok(HttpResponse::Ok().json(json!(user)))
+            let user_details = UserDetails::get_for_user(&state, user).await?;
+            
+            Ok(HttpResponse::Ok().json(user_details))
         },
         user => {
             let reason = if user.is_some() {"invalid password"} else {"no such user"};
@@ -59,6 +60,14 @@ async fn logout(state: State, request: HttpRequest, auth: MaybeAuth) -> Result<i
 }
 
 #[get("/api/who_am_i")]
-async fn who_am_i(auth: MaybeAuth) -> impl Responder {
-    HttpResponse::Ok().json(auth.user())
+async fn who_am_i(state: State, auth: MaybeAuth) -> Result<impl Responder> {
+    let user_details = match auth.user() {
+        Some(user) => {
+            let details = UserDetails::get_for_user(&state, user).await?;
+            Some(details)
+        },
+        None => None,
+    };
+    
+    Ok(HttpResponse::Ok().json(user_details))
 }

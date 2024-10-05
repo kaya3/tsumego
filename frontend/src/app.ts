@@ -6,9 +6,9 @@ class App {
     public readonly attemptTsumegoPage = new Pages.AttemptTsumego(this);
     
     public currentPage: {hide(): void} | null = null;
-    public currentUser: User | null = null;
+    public currentUser: UserDetails | null = null;
     
-    public setCurrentUser(user: User | null): void {
+    public setCurrentUser(user: UserDetails | null): void {
         this.currentUser = user;
         
         if(user) {

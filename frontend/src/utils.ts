@@ -30,3 +30,16 @@ function expectElementById(id: string, tag?: string): HTMLElement {
     
     return element;
 }
+
+/**
+ * Returns a string like `"1 problem"` or `"5 problems"`, given the count and
+ * the noun. The plural form of the noun can be given as an optional argument;
+ * by default, it is the singular noun followed by the letter 's'.
+ * 
+ * This technique only really works for simple sentences in English, but it is
+ * unlikely this app will support other languages any time soon.
+ */
+function pluralise(count: number, noun: string, nounPlural?: string): string {
+    nounPlural ??= noun + 's';
+    return `${count} ${count === 1 ? noun : nounPlural}`;
+}

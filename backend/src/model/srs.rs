@@ -43,7 +43,7 @@ impl Default for SrsState {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Deserialize, sqlx::Type)]
 pub enum Grade {
     Again = 0,
     Hard = 1,
