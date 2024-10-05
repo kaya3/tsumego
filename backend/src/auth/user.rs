@@ -47,7 +47,7 @@ impl MaybeAuth {
         let hash = hashing::token_hash(token);
         // This is giving a compilation error with SQLx 0.8.2 but not 0.7.3
         // TODO: report an issue
-        let maybe_session = sqlx::query_as!(SessionRecord, "SELECT id, user_id, (julianday(expires) - julianday(?)) AS days_left FROM sessions WHERE token_hash = ? LIMIT 1", hash, now)
+        let maybe_session = sqlx::query_as!(SessionRecord, "SELECT id, user_id, (julianday(expires) - julianday(?)) AS days_left FROM sessions WHERE token_hash = ? LIMIT 1", now, hash)
             .fetch_optional(&state.db)
             .await?;
         
