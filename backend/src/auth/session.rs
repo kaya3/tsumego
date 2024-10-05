@@ -20,8 +20,8 @@ impl Session {
         Ok(())
     }
     
-    pub async fn revoke_all_expired(state: &State) -> Result<()> {
-        log::info!("Revoking expired sessions");
+    pub async fn delete_all_expired(state: &State) -> Result<()> {
+        log::info!("Deleting expired sessions");
         sqlx::query!("DELETE FROM sessions WHERE expires <= datetime('now')")
             .execute(&state.db)
             .await?;

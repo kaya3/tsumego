@@ -7,6 +7,7 @@ use actix_web::{
 mod auth;
 mod middleware;
 mod model;
+mod periodic_jobs;
 mod result;
 mod routes;
 mod state;
@@ -29,6 +30,10 @@ async fn main() -> std::io::Result<()> {
     
     println!("Listening on {host_addr}:{host_port}");
     
+    // Run periodic jobs
+    periodic_jobs::start(state.clone());
+    
+    // Set up and start the HTTP server
     HttpServer::new(move || App::new()
         .app_data(state.clone())
         .configure(routes::declare_routes)
