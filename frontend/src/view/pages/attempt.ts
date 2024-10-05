@@ -1,8 +1,8 @@
 ///<reference path="page.ts"/>
 
 namespace Pages {
-    export class AttemptTsumego extends Page<Tsumego[]> {
-        private tsumego: Tsumego[] = [];
+    export class AttemptTsumego extends Page<TsumegoData[]> {
+        private tsumego: TsumegoData[] = [];
         private index: number = 0;
         
         private view: TsumegoView;
@@ -23,8 +23,20 @@ namespace Pages {
             view.onComplete(win => {
                 console.log(win ? 'You won!' : 'You lost');
                 
-                this.index = (this.index + 1) % this.tsumego.length;
-                setTimeout(() => view.setTsumego(this.tsumego[this.index]), 1000);
+                // TODO: use finer grades
+                const grade: Grade = win ? 'Easy' : 'Again';
+                // TODO: don't split state between this class and TsumegoView
+                
+                // TODO: await this properly, but don't delay showing next tsumego
+                // Response will say whether to add this tsumego back into the queue
+                API.postReview(this.tsumego[this.index].id, grade);
+                
+                this.index++;
+                if(this.index >= this.tsumego.length) {
+                    this.app.navigateHome();
+                } else {
+                    setTimeout(() => this.showNextTsumego(), 1000);
+                }
             });
             
             this.container.appendChild(this.view.canvas);
@@ -35,11 +47,11 @@ namespace Pages {
             loop();
         }
         
-        protected onShow(data: Tsumego[]): void {
+        protected onShow(data: TsumegoData[]): void {
             this.tsumego = data;
             this.index = 0;
             if(data.length > 0) {
-                this.view.setTsumego(data[0]);
+                this.showNextTsumego();
             }
         }
         
@@ -48,5 +60,11 @@ namespace Pages {
             this.index = 0;
             this.view.clear();
         }
+        
+        private showNextTsumego(): void {
+            const data = this.tsumego[this.index];
+            const tsumego = Tsumego.fromData(data);
+            this.view.setTsumego(tsumego);
+    }
     }
 }

@@ -24,9 +24,10 @@ class App {
         }
     }
     
-    public async main() {
-        const user = await API.whoAmI();
-        this.setCurrentUser(user);
+    public navigateHome(): void {
+        const user = this.currentUser;
+        
+        this.currentPage?.hide();
         
         if(user) {
             this.mainMenuPage.show(user);
@@ -40,5 +41,11 @@ class App {
             
             this.loginPage.show({email});
         }
+    }
+    
+    public async main() {
+        const user = await API.whoAmI();
+        this.setCurrentUser(user);
+        this.navigateHome();
     }
 }

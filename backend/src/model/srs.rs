@@ -70,7 +70,7 @@ impl SrsState {
         //   `streak_length <= 2`. For such items, the review interval is less
         //   than one day, and the e-factor is not updated.
         // - No random "fuzz" is added to the interval in this function; the
-        //   fuzz will be added to the date for the next review later.
+        //   fuzz will be added later, when scheduling the the next review.
         
         /// A time of one minute, in days. 
         const ONE_MINUTE: f64 = 1.0 / (24.0 * 60.0);

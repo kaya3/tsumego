@@ -9,6 +9,13 @@ class LoggedInHeader {
         this.logoutButton = expectElementById('logout_button', 'button');
         this.logoutButton.disabled = true;
         
+        this.username.addEventListener('click', e => {
+            this.app.navigateHome();
+            
+            e.preventDefault();
+            return false;
+        });
+        
         this.logoutButton.addEventListener('click', async () => {
             this.logoutButton.disabled = true;
             this.app.currentPage?.hide();

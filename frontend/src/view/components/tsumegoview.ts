@@ -1,5 +1,5 @@
 class TsumegoView extends BoardView {
-    public static EMPTY_TSUMEGO = Tsumego.fromJSONObject({
+    public static EMPTY_TSUMEGO = Tsumego.fromData({
         board: Board.empty(9).toString(),
         tree: 'lose',
     });

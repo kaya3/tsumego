@@ -51,7 +51,7 @@ button, input[type="submit"] {
 }
 
 #logged_in_header { justify-content: space-between; }
-#header_username { font-weight: bold; }
+#header_username { font-weight: bold; cursor: pointer; }
 
 #login_page { max-width: 20em; }
 
