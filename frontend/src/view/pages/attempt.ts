@@ -13,7 +13,7 @@ namespace Pages {
         }
         
         public async fetchAndShow(): Promise<void> {
-            const tsumego = await API.loadAllTsumego();
+            const tsumego = await API.getPendingTsumego();
             this.show(tsumego);
         }
         

@@ -1,14 +1,14 @@
 namespace API {
-    const ALL_PROBLEMS_ENDPOINT = '/api/all_problems';
+    const GET_PENDING_ENDPOINT = '/api/get_pending';
     
-    export async function loadAllTsumego(): Promise<TsumegoData[]> {
-        const response = await fetch(ALL_PROBLEMS_ENDPOINT);
+    export async function getPendingTsumego(): Promise<TsumegoData[]> {
+        const response = await fetch(GET_PENDING_ENDPOINT);
         
         if(response.ok) {
             const json: {problems: TsumegoData[]} = await response.json();
             return json.problems;
         } else {
-            reportError('Failed to load tsumego', response);
+            reportError('Failed to load pending tsumego', response);
             return [];
         }
     }

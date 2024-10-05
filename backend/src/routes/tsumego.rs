@@ -7,7 +7,7 @@ use actix_web::{
 use serde_json::json;
 
 use crate::{
-    model::Tsumego,
+    model::{Tsumego, User},
     result::{OrAppError, Result},
     state::State,
 };
@@ -15,6 +15,7 @@ use crate::{
 /// Declares routes for fetching Tsumego data.
 pub fn declare_routes(conf: &mut ServiceConfig) {
     conf.service(get_tsumego)
+        .service(get_pending)
         .service(all_tsumego);
 }
 
@@ -25,6 +26,16 @@ async fn get_tsumego(state: State, id: Path<i64>) -> Result<impl Responder> {
         .or_404_not_found()?;
     
     Ok(HttpResponse::Ok().json(tsumego))
+}
+
+#[get("/api/get_pending")]
+async fn get_pending(state: State, user: User) -> Result<impl Responder> {
+    let pending = Tsumego::get_pending(&state, user.id)
+        .await?;
+    
+    Ok(HttpResponse::Ok().json(json!({
+        "problems": pending,
+    })))
 }
 
 #[get("/api/all_problems")]

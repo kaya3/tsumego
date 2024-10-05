@@ -38,15 +38,30 @@ impl Tsumego {
     /// Fetches a Tsumego from the database by its name, returning `None` if
     /// the name is not found.
     pub async fn get_by_name(state: &State, name: &str) -> Result<Option<Self>> {
-        Ok(sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego WHERE name = ? LIMIT 1", name)
+        let tsumego = sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego WHERE name = ? LIMIT 1", name)
             .fetch_optional(&state.db)
-            .await?)
+            .await?;
+        
+        Ok(tsumego)
     }
     
     /// Fetches a vector of all Tsumego instances from the database.
     pub async fn get_all(state: &State) -> Result<Vec<Tsumego>> {
-        Ok(sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego")
+        let all_tsumego = sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego")
             .fetch_all(&state.db)
-            .await?)
+            .await?;
+        
+        Ok(all_tsumego)
+    }
+    
+    pub async fn get_pending(state: &State, user_id: i64) -> Result<Vec<Tsumego>> {
+        let now = chrono::Utc::now().naive_utc();
+        let max_reviews = state.cfg.max_reviews_per_day;
+        
+        let pending = sqlx::query_as!(Self, "SELECT id, name, board, tree FROM tsumego WHERE id IN (SELECT tsumego_id FROM user_tsumego_stats WHERE user_id = ? AND review_due <= ?) LIMIT ?", user_id, now, max_reviews)
+            .fetch_all(&state.db)
+            .await?;
+        
+        Ok(pending)
     }
 }
