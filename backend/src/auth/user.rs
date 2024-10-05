@@ -1,6 +1,6 @@
 use actix_web::{dev::Payload, FromRequest, HttpMessage, HttpRequest};
 
-use crate::{model::{Session, User}, result::{AppError, OrAppError, Result}, state::State};
+use crate::{model::{time::now, Session, User}, result::{AppError, OrAppError, Result}, state::State};
 use super::{hashing, AuthTokenAction};
 
 impl User {
@@ -42,10 +42,12 @@ impl MaybeAuth {
             days_left: Option<f64>,
         }
         
+        let now = now();
+        
         let hash = hashing::token_hash(token);
         // This is giving a compilation error with SQLx 0.8.2 but not 0.7.3
         // TODO: report an issue
-        let maybe_session = sqlx::query_as!(SessionRecord, "SELECT id, user_id, (julianday(expires) - julianday('now')) AS days_left FROM sessions WHERE token_hash = ? LIMIT 1", hash)
+        let maybe_session = sqlx::query_as!(SessionRecord, "SELECT id, user_id, (julianday(expires) - julianday(?)) AS days_left FROM sessions WHERE token_hash = ? LIMIT 1", hash, now)
             .fetch_optional(&state.db)
             .await?;
         

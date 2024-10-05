@@ -1,4 +1,4 @@
-use crate::{model::Session, result::Result, state::State};
+use crate::{model::time, model::Session, result::Result, state::State};
 use super::hashing;
 
 impl Session {
@@ -21,8 +21,10 @@ impl Session {
     }
     
     pub async fn delete_all_expired(state: &State) -> Result<()> {
+        let now = time::now();
+        
         log::info!("Deleting expired sessions");
-        sqlx::query!("DELETE FROM sessions WHERE expires <= datetime('now')")
+        sqlx::query!("DELETE FROM sessions WHERE expires <= ?", now)
             .execute(&state.db)
             .await?;
         
@@ -36,7 +38,8 @@ impl Session {
         let (token, hash) = generate_new_token(state)
             .await?;
         
-        sqlx::query!("INSERT INTO sessions (user_id, token_hash, expires) VALUES (?, ?, datetime('now', '+'||?||' days'))", user_id, hash, state.cfg.session_duration_days)
+        let expires = get_expiry_time_from_now(state);
+        sqlx::query!("INSERT INTO sessions (user_id, token_hash, expires) VALUES (?, ?, ?)", user_id, hash, expires)
             .execute(&state.db)
             .await?;
         
@@ -51,12 +54,17 @@ impl Session {
         let (token, hash) = generate_new_token(state)
             .await?;
         
-        sqlx::query!("UPDATE sessions SET token_hash = ?, expires = datetime('now', '+'||?||' days') WHERE id = ?", hash, state.cfg.session_duration_days, session_id)
+        let expires = get_expiry_time_from_now(state);
+        sqlx::query!("UPDATE sessions SET token_hash = ?, expires = ? WHERE id = ?", hash, expires, session_id)
             .execute(&state.db)
             .await?;
         
         Ok(token)
     }
+}
+
+fn get_expiry_time_from_now(state: &State) -> time::DateTime {
+    time::add_days(time::now(), state.cfg.session_duration_days as f64)
 }
 
 /// Helper function which generates a new random session token, and its hash.

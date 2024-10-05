@@ -1,7 +1,7 @@
 use sqlx::types::JsonValue;
 
-use crate::result::Result;
-use crate::state::State;
+use crate::{result::Result, state::State};
+use super::time;
 
 /// Data for a tsumego. The board and variation tree are sent to the client,
 /// and not otherwise used in the backend.
@@ -55,7 +55,7 @@ impl Tsumego {
     }
     
     pub async fn get_pending(state: &State, user_id: i64) -> Result<Vec<Tsumego>> {
-        let now = chrono::Utc::now().naive_utc();
+        let now = time::now();
         let max_reviews = state.cfg.max_reviews_per_day;
         
         let pending = sqlx::query_as!(Self, "SELECT id, name, board, tree FROM tsumego WHERE id IN (SELECT tsumego_id FROM user_tsumego_stats WHERE user_id = ? AND review_due <= ?) LIMIT ?", user_id, now, max_reviews)

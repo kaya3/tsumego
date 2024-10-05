@@ -1,7 +1,7 @@
 use rand::Rng;
 
 use crate::{state::State, result::Result};
-use super::{Grade, SrsState};
+use super::{time, Grade, SrsState};
 
 #[derive(serde::Serialize)]
 pub struct UserTsumegoStats {
@@ -17,13 +17,13 @@ pub struct UserTsumegoStats {
     
     /// The last time this user reviewed this tsumego, in UTC.
     #[serde(rename = "lastReviewDate")]
-    last_review_date: chrono::NaiveDateTime,
+    last_review_date: time::DateTime,
     
     /// The time at or after which this user should be prompted on this tsumego
     /// again, in UTC. `None` indicates the tsumego has been reviewed in the
     /// past but is not currently in rotation, and shouldn't be prompted.
     #[serde(rename = "reviewDue")]
-    review_due: Option<chrono::NaiveDateTime>,
+    review_due: Option<time::DateTime>,
     
     /// The spaced repetition system (SRS) state representing this user's
     /// memory of this tsumego.
@@ -42,8 +42,8 @@ struct FlatStats {
     id: i64,
     user_id: i64,
     tsumego_id: i64,
-    last_review_date: chrono::NaiveDateTime,
-    review_due: Option<chrono::NaiveDateTime>,
+    last_review_date: time::DateTime,
+    review_due: Option<time::DateTime>,
     num_reviews: i64,
     streak_length: i64,
     interval: f64,
@@ -92,7 +92,7 @@ impl UserTsumegoStats {
     }
     
     pub async fn update_on_review(state: &State, user_id: i64, tsumego_id: i64, grade: Grade) -> Result<Self> {
-        let now = chrono::Utc::now().naive_utc();
+        let now = time::now();
         
         let stats = Self::get(state, user_id, tsumego_id)
             .await?;
@@ -100,7 +100,7 @@ impl UserTsumegoStats {
         let srs_state = match stats.as_ref() {
             Some(prior) => {
                 // The user already has stats for this tsumego
-                let days_since_last_review = delta_days(prior.last_review_date, now);
+                let days_since_last_review = time::delta_days(prior.last_review_date, now);
                 prior.srs_state
                     .update_on_review(days_since_last_review, grade)
             },
@@ -122,7 +122,7 @@ impl UserTsumegoStats {
             let fuzz_range = (1.0 - fuzz_factor)..(1.0 + fuzz_factor);
             let fuzz = rand::thread_rng().gen_range(fuzz_range);
             
-            Some(add_days(now, srs_state.interval * fuzz))
+            Some(time::add_days(now, srs_state.interval * fuzz))
         };
         
         let id = sqlx::query_scalar!("INSERT OR REPLACE INTO user_tsumego_stats (user_id, tsumego_id, last_review_date, review_due, num_reviews, streak_length, interval, e_factor) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id", user_id, tsumego_id, now, review_due, srs_state.num_reviews, srs_state.streak_length, srs_state.interval, srs_state.e_factor)
@@ -148,16 +148,4 @@ impl UserTsumegoStats {
         
         Ok(new_stats)
     }
-}
-
-const SECONDS_PER_DAY: f64 = 60.0 * 60.0 * 24.0;
-
-fn add_days(from: chrono::NaiveDateTime, delta_days: f64) -> chrono::NaiveDateTime {
-    let delta_seconds = SECONDS_PER_DAY * delta_days;
-    from + chrono::TimeDelta::seconds(delta_seconds as i64)
-}
-
-fn delta_days(from: chrono::NaiveDateTime, to: chrono::NaiveDateTime) -> f64 {
-    let delta_seconds = (to - from).num_seconds();
-    (delta_seconds as f64) / SECONDS_PER_DAY
 }
