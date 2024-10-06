@@ -6,17 +6,28 @@ namespace Pages {
         private index: number = 0;
         
         private view: TsumegoView;
+        private correctSound: HTMLAudioElement;
+        private incorrectSound: HTMLAudioElement;
         
         public constructor(app: App) {
             super(app, 'attempt_tsumego_page');
             this.view = new TsumegoView();
+            
+            this.correctSound = expectElementById('correct_sound', 'audio');
+            this.incorrectSound = expectElementById('incorrect_sound', 'audio');
         }
         
         protected hydrate(): void {
             const view = this.view;
             
             view.onComplete(async win => {
+                // TODO: show visible message
                 console.log(win ? 'You won!' : 'You lost');
+                
+                // Play a sound to indicate whether the solution is correct
+                let sound = win ? this.correctSound : this.incorrectSound;
+                sound.currentTime = 0;
+                await sound.play();
                 
                 // TODO: use finer grades
                 const grade: Grade = win ? 'Easy' : 'Again';
