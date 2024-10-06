@@ -16,9 +16,10 @@ function fail(message: string, ...args: unknown[]): never {
  * Helper function to get an element from the DOM by its ID, or throw an error
  * if no such element exists.
  * 
- * A tag name can be provided as an optional argument, in which case 
+ * If `expectedTagName` is provided, and does not match the the tag's actual
+ * name, an error is thrown.
  */
-function expectElementById<T extends keyof HTMLElementTagNameMap>(id: string, tag: T): HTMLElementTagNameMap[T];
+function expectElementById<T extends keyof HTMLElementTagNameMap>(id: string, expectedTagName: T): HTMLElementTagNameMap[T];
 function expectElementById(id: string): HTMLElement;
 function expectElementById(id: string, tag?: string): HTMLElement {
     const element = document.getElementById(id)
@@ -33,8 +34,8 @@ function expectElementById(id: string, tag?: string): HTMLElement {
 
 /**
  * Returns a string like `"1 problem"` or `"5 problems"`, given the count and
- * the noun. The plural form of the noun can be given as an optional argument;
- * by default, it is the singular noun followed by the letter 's'.
+ * the singular noun. The plural form of the noun can be given as an optional
+ * argument; by default, it is the singular noun followed by the letter 's'.
  * 
  * This technique only really works for simple sentences in English, but it is
  * unlikely this app will support other languages any time soon.
