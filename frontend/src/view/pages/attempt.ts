@@ -6,13 +6,17 @@ namespace Pages {
         private index: number = 0;
         
         private view: TsumegoView;
-        private correctSound: HTMLAudioElement;
-        private incorrectSound: HTMLAudioElement;
+        private readonly boardContainer: HTMLElement;
+        private readonly resultContainer: HTMLElement;
+        private readonly correctSound: HTMLAudioElement;
+        private readonly incorrectSound: HTMLAudioElement;
         
         public constructor(app: App) {
             super(app, 'attempt_tsumego_page');
             this.view = new TsumegoView();
             
+            this.boardContainer = expectElementById('attempt_board');
+            this.resultContainer = expectElementById('result_container');
             this.correctSound = expectElementById('correct_sound', 'audio');
             this.incorrectSound = expectElementById('incorrect_sound', 'audio');
         }
@@ -21,8 +25,16 @@ namespace Pages {
             const view = this.view;
             
             view.onComplete(async win => {
-                // TODO: show visible message
-                console.log(win ? 'You won!' : 'You lost');
+                // Show a message
+                let resultContainer = this.resultContainer;
+                resultContainer.classList.remove('hidden');
+                if(win) {
+                    resultContainer.classList.add('correct');
+                    resultContainer.innerText = 'Correct!';
+                } else {
+                    resultContainer.classList.remove('correct');
+                    resultContainer.innerText = 'Incorrect';
+                }
                 
                 // Play a sound to indicate whether the solution is correct
                 let sound = win ? this.correctSound : this.incorrectSound;
@@ -67,7 +79,7 @@ namespace Pages {
                 }, 1000);
             });
             
-            this.container.appendChild(this.view.canvas);
+            this.boardContainer.appendChild(this.view.canvas);
             function loop() {
                 view.draw();
                 requestAnimationFrame(loop);
@@ -81,18 +93,21 @@ namespace Pages {
             if(data.length > 0) {
                 this.showNextTsumego();
             }
+            this.resultContainer.classList.add('hidden');
         }
         
         protected onHide(): void {
             this.tsumego = [];
             this.index = 0;
             this.view.clear();
+            this.resultContainer.classList.add('hidden');
         }
         
         private showNextTsumego(): void {
             const data = this.tsumego[this.index];
             const tsumego = Tsumego.fromData(data);
             this.view.setTsumego(tsumego);
+            this.resultContainer.classList.add('hidden');
     }
     }
 }

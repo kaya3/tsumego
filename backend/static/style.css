@@ -2,6 +2,9 @@ body {
     margin: 0;
     padding: 0;
     font-family: Roboto, 'Open Sans', Arial, Helvetica, sans-serif;
+    --header-bg-color: #d0e0ff;
+    --correct-bg-color: #e0ffd0;
+    --incorrect-bg-color: #ffe0d0;
 }
 
 button, input {
@@ -47,7 +50,7 @@ button, input[type="submit"] {
 }
 
 .header {
-    background-color: #d0e0ff;
+    background-color: var(--header-bg-color);
 }
 
 #logged_in_header { justify-content: space-between; }
@@ -57,3 +60,21 @@ button, input[type="submit"] {
 
 #login_form label { flex-grow: 1; }
 #login_message { color: red; }
+
+#attempt_board { position: relative; }
+#attempt_board canvas { z-index: 0; }
+#result_container {
+    position: absolute;
+    left: 20%;
+    right: 20%;
+    top: 40%;
+    bottom: 40%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    border: 0.5em solid white;
+}
+
+#result_container.correct { background-color: var(--correct-bg-color); }
+#result_container:not(.correct) { background-color: var(--incorrect-bg-color);}
