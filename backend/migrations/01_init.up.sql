@@ -46,5 +46,4 @@ CREATE TABLE IF NOT EXISTS user_tsumego_reviews (
     review_date DATETIME NOT NULL,
     grade INTEGER CHECK(grade BETWEEN 0 AND 3) NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS tsumego_reviews_per_user_unique ON user_tsumego_reviews (user_id, tsumego_id);
 CREATE INDEX IF NOT EXISTS tsumego_reviews_by_date ON user_tsumego_reviews (review_date);

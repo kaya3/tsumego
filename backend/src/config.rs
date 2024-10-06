@@ -16,7 +16,7 @@ pub struct Config {
     pub session_duration_days: i64,
     pub session_renew_after_days: i64,
     
-    pub max_reviews_per_day: i64,
+    pub max_problems_at_once: i64,
     pub srs_interval_fuzz_factor: f64,
 }
 

@@ -8,7 +8,7 @@ use serde_json::json;
 
 use crate::{
     model::{Tsumego, User},
-    result::{OrAppError, Result},
+    result::{AppError, OrAppError, Result},
     state::State,
 };
 
@@ -16,7 +16,7 @@ use crate::{
 pub fn declare_routes(conf: &mut ServiceConfig) {
     conf.service(get_tsumego)
         .service(get_pending)
-        .service(all_tsumego);
+        .service(get_random_unstudied);
 }
 
 #[get("/api/problem/{id}")]
@@ -38,9 +38,14 @@ async fn get_pending(state: State, user: User) -> Result<impl Responder> {
     })))
 }
 
-#[get("/api/all_problems")]
-async fn all_tsumego(state: State) -> Result<impl Responder> {
-    let problems = Tsumego::get_all(&state)
+#[get("/api/get_random_unstudied/{limit}")]
+async fn get_random_unstudied(state: State, user: User, limit: Path<i64>) -> Result<impl Responder> {
+    let limit = limit.into_inner();
+    if limit < 1 || limit > state.cfg.max_problems_at_once {
+        return Err(AppError::BAD_REQUEST);
+    }
+    
+    let problems = Tsumego::get_random_unstudied(&state, user.id, limit)
         .await?;
     
     Ok(HttpResponse::Ok().json(json!({

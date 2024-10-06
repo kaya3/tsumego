@@ -45,20 +45,24 @@ impl Tsumego {
         Ok(tsumego)
     }
     
-    /// Fetches a vector of all Tsumego instances from the database.
-    pub async fn get_all(state: &State) -> Result<Vec<Tsumego>> {
-        let all_tsumego = sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego")
+    /// Fetches up to `limit` randomly-selected tsumego from the database,
+    /// which haven't yet been studied by this user.
+    pub async fn get_random_unstudied(state: &State, user_id: i64, limit: i64) -> Result<Vec<Tsumego>> {
+        let unstudied_tsumego = sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego WHERE id NOT IN (SELECT tsumego_id FROM user_tsumego_stats WHERE user_id = ?) ORDER BY RANDOM() LIMIT ?", user_id, limit)
             .fetch_all(&state.db)
             .await?;
         
-        Ok(all_tsumego)
+        Ok(unstudied_tsumego)
     }
     
+    /// Fetches tsumego from the database which are due for review by this
+    /// user. The number of tsumego is capped by the environment variable
+    /// `MAX_PROBLEMS_AT_ONCE`.
     pub async fn get_pending(state: &State, user_id: i64) -> Result<Vec<Tsumego>> {
         let now = time::now();
-        let max_reviews = state.cfg.max_reviews_per_day;
+        let max_reviews = state.cfg.max_problems_at_once;
         
-        let pending = sqlx::query_as!(Self, "SELECT id, name, board, tree FROM tsumego WHERE id IN (SELECT tsumego_id FROM user_tsumego_stats WHERE user_id = ? AND review_due <= ?) LIMIT ?", user_id, now, max_reviews)
+        let pending = sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego WHERE id IN (SELECT tsumego_id FROM user_tsumego_stats WHERE user_id = ? AND review_due <= ?) LIMIT ?", user_id, now, max_reviews)
             .fetch_all(&state.db)
             .await?;
         

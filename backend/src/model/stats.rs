@@ -95,7 +95,8 @@ impl UserTsumegoStats {
         let now = time::now();
         
         // Insert a record of this review.
-        sqlx::query!("INSERT INTO user_tsumego_reviews (user_id, tsumego_id, review_date, grade) VALUES (?, ?, ?, ?)", user_id, tsumego_id, now, grade)
+        let grade_int = grade as usize as i64;
+        sqlx::query!("INSERT INTO user_tsumego_reviews (user_id, tsumego_id, review_date, grade) VALUES (?, ?, ?, ?)", user_id, tsumego_id, now, grade_int)
             .execute(&state.db)
             .await?;
         

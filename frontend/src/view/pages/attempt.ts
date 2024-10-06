@@ -12,11 +12,6 @@ namespace Pages {
             this.view = new TsumegoView();
         }
         
-        public async fetchAndShow(): Promise<void> {
-            const tsumego = await API.getPendingTsumego();
-            this.show(tsumego);
-        }
-        
         protected hydrate(): void {
             const view = this.view;
             
@@ -45,12 +40,20 @@ namespace Pages {
                     }
                 }
                 
-                this.index++;
-                if(this.index >= this.tsumego.length) {
-                    this.app.navigateHome();
-                } else {
-                    setTimeout(() => this.showNextTsumego(), 1000);
+                // If this tsumego is due to be reviewed again today, add it
+                // again to the end of the queue
+                if(stats && stats.srsState.interval < 1) {
+                    this.tsumego.push(this.tsumego[this.index]);
                 }
+                
+                this.index++;
+                setTimeout(() => {
+                    if(this.index < this.tsumego.length) {
+                        this.showNextTsumego();
+                    } else {
+                        this.app.navigateHome();
+                    }
+                }, 1000);
             });
             
             this.container.appendChild(this.view.canvas);
