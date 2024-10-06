@@ -78,3 +78,4 @@ button, input[type="submit"] {
 
 #result_container.correct { background-color: var(--correct-bg-color); }
 #result_container:not(.correct) { background-color: var(--incorrect-bg-color);}
+#review_buttons { justify-content: center; }
