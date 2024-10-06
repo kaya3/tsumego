@@ -77,8 +77,8 @@ impl UserDetails {
         
         Ok(Self {
             user,
-            reviews_due_today: 5,//details.due_today.unwrap_or(0) as i64,
-            reviews_done_today: 3,//details.done_today.unwrap_or(0) as i64,
+            reviews_due_today: details.due_today.unwrap_or(0) as i64,
+            reviews_done_today: details.done_today.unwrap_or(0) as i64,
         })
     }
 }

@@ -20,16 +20,30 @@ namespace Pages {
         protected hydrate(): void {
             const view = this.view;
             
-            view.onComplete(win => {
+            view.onComplete(async win => {
                 console.log(win ? 'You won!' : 'You lost');
                 
                 // TODO: use finer grades
                 const grade: Grade = win ? 'Easy' : 'Again';
                 // TODO: don't split state between this class and TsumegoView
                 
-                // TODO: await this properly, but don't delay showing next tsumego
+                // TODO: don't delay showing next tsumego in case this request is slow
                 // Response will say whether to add this tsumego back into the queue
-                API.postReview(this.tsumego[this.index].id, grade);
+                const stats = await API.postReview(this.tsumego[this.index].id, grade);
+                
+                const user = this.app.currentUser;
+                if(user) {
+                    user.reviewsDoneToday++;
+                    // TODO: this isn't exactly right, since this review might
+                    // not have been due; perhaps it was reviewed early, or not
+                    // scheduled at all
+                    if(stats && stats?.srsState.interval >= 1) {
+                        // `interval >= 1` means this tsumego is no longer due today
+                        if(user.reviewsDueToday > 0) {
+                            user.reviewsDueToday--;
+                        }
+                    }
+                }
                 
                 this.index++;
                 if(this.index >= this.tsumego.length) {
