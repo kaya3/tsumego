@@ -18,7 +18,19 @@ namespace Pages {
             this.beginReviewingButton.addEventListener('click', async () => {
                 this.hide();
                 const tsumego = await API.getPendingTsumego();
-                this.app.attemptTsumegoPage.show(tsumego);
+                if(tsumego.length > 0) {
+                    this.app.attemptTsumegoPage.show(tsumego);
+                } else if(this.app.currentUser) {
+                    // Normally shouldn't happen, but e.g. if the user loaded
+                    // this page on one device, then completed their reviews on
+                    // another device, the state here would be outdated.
+                    this.app.currentUser.reviewsDueToday = 0;
+                    this.onShow(this.app.currentUser);
+                } else {
+                    // Shouldn't happen, but if the user is not logged in then
+                    // they are in the wrong place. Navigate to login form.
+                    this.app.navigateHome();
+                }
             });
             this.studyRandomButton.addEventListener('click', async () => {
                 this.hide();

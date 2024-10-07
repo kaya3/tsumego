@@ -69,12 +69,16 @@ namespace Pages {
         }
         
         protected onShow(data: TsumegoData[]): void {
+            if(data.length === 0) {
+                // We shouldn't be on this page
+                console.error(`Navigated to AttemptTsumego page with empty array`);
+                this.app.navigateHome();
+                return;
+            }
+            
             this.tsumego = data;
             this.index = 0;
-            // TODO: ensure the array is non-empty before navigating here
-            if(data.length > 0) {
-                this.showNextTsumego();
-            }
+            this.showNextTsumego();
             this.resultContainer.classList.add('hidden');
         }
         
