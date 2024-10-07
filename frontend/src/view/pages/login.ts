@@ -1,6 +1,9 @@
 ///<reference path="page.ts"/>
 
 namespace Pages {
+    /**
+     * 
+     */
     export class LoginForm extends Page<{email: string | null | undefined}> {
         private readonly form: HTMLFormElement;
         private readonly email: HTMLInputElement;
@@ -27,6 +30,7 @@ namespace Pages {
                 const email = this.email.value.trim();
                 const password = this.password.value;
                 
+                // Some simple client-side validation
                 if(!email.includes('@')) {
                     this.message.innerText = 'Please enter your email address';
                     this.email.focus();
@@ -39,6 +43,7 @@ namespace Pages {
                 
                 this.submitButton.disabled = true;
                 this.registerButton.disabled = true;
+                
                 const user = await API.login(email, password);
                 if(user) {
                     // This also shows the header
@@ -61,6 +66,8 @@ namespace Pages {
                 const email = this.email.value.trim();
                 const password = this.password.value;
                 
+                // Navigate to registration page, preserving email and password
+                // inputs if they are already entered
                 this.hide();
                 this.app.registerPage.show({email, password});
             });

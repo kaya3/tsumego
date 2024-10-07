@@ -20,8 +20,8 @@ class App {
     public readonly loggedInHeader = new LoggedInHeader(this);
     
     public readonly loginPage = new Pages.LoginForm(this);
-    public readonly registerPage = new Pages.RegisterPage(this);
-    public readonly registerSuccessPage = new Pages.RegisterSuccessPage(this);
+    public readonly registerPage = new Pages.Register(this);
+    public readonly registerSuccessPage = new Pages.RegisterSuccess(this);
     public readonly mainMenuPage = new Pages.MainMenu(this);
     public readonly attemptTsumegoPage = new Pages.AttemptTsumego(this);
     

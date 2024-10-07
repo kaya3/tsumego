@@ -17,6 +17,9 @@ namespace API {
         return await fetch(endpoint, request);
     }
     
+    /**
+     * Logs an unexpected error response from the API, in the browser console.
+     */
     export async function reportError(message: string, response: Response): Promise<void> {
         console.error(`${message}: ${await response.text()}`);
     }

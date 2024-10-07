@@ -1,10 +1,17 @@
 namespace Pages {
+    /**
+     * Initial data for the registration form; this can be copied from the
+     * login form, in case the user enters details there first.
+     */
     export interface RegisterData {
         readonly email: string;
         readonly password: string;
     }
     
-    export class RegisterPage extends Page<RegisterData> {
+    /**
+     * Registration page for new users.
+     */
+    export class Register extends Page<RegisterData> {
         private readonly form: HTMLFormElement;
         private readonly email: HTMLInputElement;
         private readonly displayName: HTMLInputElement;
@@ -34,6 +41,7 @@ namespace Pages {
                 const password = this.password.value;
                 const confirmPassword = this.confirmPassword.value;
                 
+                // Some simple client-side validation
                 if(!email.includes('@')) {
                     this.message.innerText = 'Please enter your email address';
                     this.email.focus();
@@ -93,7 +101,10 @@ namespace Pages {
         }
     }
     
-    export class RegisterSuccessPage extends Page<{verificationID: number}> {
+    /**
+     * Page shown on successful user registration.
+     */
+    export class RegisterSuccess extends Page<{verificationID: number}> {
         public constructor(app: App) {
             super(app, 'register_success_page');
         }
