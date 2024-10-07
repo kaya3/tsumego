@@ -25,6 +25,8 @@ class BoardView {
     private hoveredRow: number = -1;
     private hoveredCol: number = -1;
     
+    private readonly onPlayCallbacks: ((row: number, col: number) => void)[] = [];
+    
     public constructor(board: Board) {
         this.setBoard(board);
         
@@ -34,33 +36,42 @@ class BoardView {
         this.ctx = canvas.getContext('2d')
             ?? fail(`failed to get 2D canvas context`);
         
-        canvas.addEventListener('mouseenter', e => this.onHover(e));
-        canvas.addEventListener('mousemove', e => this.onHover(e));
-        canvas.addEventListener('mouseleave', e => this.onMouseLeave());
+        this.canvas.addEventListener('click', e => this.handleClick(e));
+        canvas.addEventListener('mouseenter', e => this.handleHover(e));
+        canvas.addEventListener('mousemove', e => this.handleHover(e));
+        canvas.addEventListener('mouseleave', e => this.handleMouseLeave());
     }
     
+    /**
+     * Registers a callback function to be called when a move is played on this
+     * board. Only legal moves can be played, and only when play is enabled.
+     */
     public onPlay(callback: (row: number, col: number) => void): void {
-        this.canvas.addEventListener('click', e => {
-            const [row, col] = this.fromXY(e);
-            if(this.playEnabled && this.board.isLegal(row, col)) {
+        this.onPlayCallbacks.push(callback);
+    }
+    
+    private handleClick(e: MouseEvent): void {
+        const [row, col] = this.fromXY(e);
+        if(this.playEnabled && this.board.isLegal(row, col)) {
+            for(const callback of this.onPlayCallbacks) {
                 callback(row, col);
             }
-            
-            this.onHover(e);
-        });
+        }
+        
+        this.handleHover(e);
     }
     
-    private onHover(e: MouseEvent): void {
+    private handleHover(e: MouseEvent): void {
         const [row, col] = this.fromXY(e);
         if(this.board.isLegal(row, col)) {
             this.hoveredRow = row;
             this.hoveredCol = col;
         } else {
-            this.onMouseLeave();
+            this.handleMouseLeave();
         }
     }
     
-    private onMouseLeave(): void {
+    private handleMouseLeave(): void {
         this.hoveredRow = -1;
         this.hoveredCol = -1;
     }
@@ -159,6 +170,10 @@ class BoardView {
         ];
     }
     
+    /**
+     * Determines if a star point should be drawn at the given coordinates, on
+     * a board of the given size.
+     */
     private static isStarPoint(size: number, row: number, col: number): boolean {
         // No star points on small boards
         if(size < 5) {

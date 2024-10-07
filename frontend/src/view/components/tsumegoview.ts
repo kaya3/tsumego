@@ -32,6 +32,11 @@ class TsumegoView extends BoardView {
         });
     }
     
+    /**
+     * Updates the currently visible tsumego, allowing play to continue if it
+     * is the black player's turn and the tsumego is not complete. If the
+     * tsumego is complete, any registered callbacks are invoked.
+     */
     public setTsumego(tsumego: Tsumego): void {
         this.tsumego = tsumego;
         this.playEnabled = !tsumego.isComplete() && tsumego.board.nextPlayer() === 'b';
@@ -46,11 +51,18 @@ class TsumegoView extends BoardView {
         }
     }
     
+    /**
+     * Clears this view, showing an empty board on which play is disabled.
+     */
     public clear(): void {
         this.tsumego = TsumegoView.EMPTY_TSUMEGO;
         this.playEnabled = false;
     }
     
+    /**
+     * Registers a callback function to be called when this tsumego is
+     * completed, either won or lost.
+     */
     public onComplete(callback: (win: boolean) => void): void {
         this.onCompleteCallbacks.push(callback);
     }
