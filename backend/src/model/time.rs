@@ -1,4 +1,8 @@
-use chrono::{NaiveDateTime, TimeDelta, Utc};
+use chrono::{
+    NaiveDateTime,
+    TimeDelta,
+    Utc,
+};
 
 /// The type of datetime used in this application. `chrono::NaiveDateTime`
 /// is "timezone-less", but `chrono::Utc` doesn't work with `sqlx`. So the
@@ -6,17 +10,20 @@ use chrono::{NaiveDateTime, TimeDelta, Utc};
 /// UTC.
 pub type DateTime = NaiveDateTime;
 
+/// Returns the current time.
 pub fn now() -> DateTime {
     Utc::now().naive_utc()
 }
 
 const SECONDS_PER_DAY: f64 = 60.0 * 60.0 * 24.0;
 
+/// Adds a number of days to a time.
 pub fn add_days(from: DateTime, delta_days: f64) -> DateTime {
     let delta_seconds = SECONDS_PER_DAY * delta_days;
     from + TimeDelta::seconds(delta_seconds as i64)
 }
 
+/// Returns the fractional number of days between two times, as a float.
 pub fn delta_days(from: DateTime, to: DateTime) -> f64 {
     let delta_seconds = (to - from).num_seconds();
     (delta_seconds as f64) / SECONDS_PER_DAY

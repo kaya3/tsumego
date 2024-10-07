@@ -1,11 +1,23 @@
-use actix_web::{dev::Payload, FromRequest, HttpMessage, HttpRequest};
+use actix_web::{
+    dev::Payload,
+    FromRequest,
+    HttpMessage,
+    HttpRequest,
+};
 
-use crate::{model::{time::{delta_days, now}, Session, User}, result::{AppError, OrAppError, Result}, state::State};
-use super::{hashing, AuthTokenAction};
+use crate::{
+    auth::{hashing, AuthTokenAction},
+    model::{time, Session, User},
+    result::{AppError, OrAppError, Result},
+    state::State,
+};
 
 impl User {
     pub async fn check_password(&self, state: &State, given_password: &str) -> Result<bool> {
-        let password_hash = sqlx::query_scalar!("SELECT password_hash FROM users WHERE id = ?", self.id)
+        let password_hash = sqlx::query_scalar!(
+            "SELECT password_hash FROM users WHERE id = ?",
+            self.id,
+        )
             .fetch_one(&state.db)
             .await?;
         
@@ -46,7 +58,14 @@ impl MaybeAuth {
         let hash = hashing::token_hash(token);
         // This is giving a compilation error with SQLx 0.8.2 but not 0.7.3
         // TODO: report an issue
-        let maybe_session = sqlx::query_as!(Session, "SELECT id, user_id, expires FROM sessions WHERE token_hash = ? LIMIT 1", hash)
+        let maybe_session = sqlx::query_as!(
+            Session,
+            "SELECT id, user_id, expires
+                FROM sessions
+                WHERE token_hash = ?
+                LIMIT 1",
+            hash,
+        )
             .fetch_optional(&state.db)
             .await?;
         
@@ -57,7 +76,7 @@ impl MaybeAuth {
             return Ok((Self::Unauthenticated, AuthTokenAction::Revoke));
         };
         
-        let days_left = delta_days(now(), session.expires);
+        let days_left = time::delta_days(time::now(), session.expires);
         
         // Check whether to revoke an expired session
         if days_left <= 0.0 {

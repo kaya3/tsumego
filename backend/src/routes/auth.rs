@@ -1,9 +1,17 @@
 use actix_web::{
-    get, post, web::{Json, Query, ServiceConfig}, HttpRequest, HttpResponse, Responder
+    get,
+    post,
+    web::{Json, Query, ServiceConfig},
+    HttpRequest,
+    HttpResponse,
+    Responder,
 };
 
 use crate::{
-    auth::{AuthTokenAction, MaybeAuth}, model::{Session, User, UserDetails}, result::{AppError, Result}, state::State
+    auth::{AuthTokenAction, MaybeAuth},
+    model::{Session, User, UserDetails},
+    result::{AppError, Result},
+    state::State,
 };
 
 /// Declares routes for login/logout and other authentication actions.

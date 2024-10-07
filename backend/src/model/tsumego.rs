@@ -1,7 +1,10 @@
 use sqlx::types::JsonValue;
 
-use crate::{result::Result, state::State};
-use super::time;
+use crate::{
+    model::time,
+    result::Result,
+    state::State,
+};
 
 /// Data for a tsumego. The board and variation tree are sent to the client,
 /// and not otherwise used in the backend.
@@ -27,7 +30,12 @@ impl Tsumego {
     /// Fetches a Tsumego from the database by its id, returning `None` if the
     /// id is not found.
     pub async fn get_by_id(state: &State, id: i64) -> Result<Option<Self>> {
-        let tsumego = sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego WHERE id = ?", id)
+        let tsumego = sqlx::query_as!(
+            Self,
+            "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego
+                WHERE id = ?",
+            id,
+        )
             .fetch_optional(&state.db)
             .await?;
         
@@ -35,19 +43,15 @@ impl Tsumego {
         Ok(tsumego)
     }
     
-    /// Fetches a Tsumego from the database by its name, returning `None` if
-    /// the name is not found.
-    pub async fn get_by_name(state: &State, name: &str) -> Result<Option<Self>> {
-        let tsumego = sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego WHERE name = ? LIMIT 1", name)
-            .fetch_optional(&state.db)
-            .await?;
-        
-        Ok(tsumego)
-    }
-    
     /// Fetches up to `limit` randomly-selected tsumego from the database.
     pub async fn get_random(state: &State, limit: i64) -> Result<Vec<Tsumego>> {
-        let tsumego = sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego ORDER BY RANDOM() LIMIT ?", limit)
+        let tsumego = sqlx::query_as!(
+            Self,
+            "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego
+                ORDER BY RANDOM()
+                LIMIT ?",
+            limit,
+        )
             .fetch_all(&state.db)
             .await?;
         
@@ -57,7 +61,18 @@ impl Tsumego {
     /// Fetches up to `limit` randomly-selected tsumego from the database,
     /// which haven't yet been studied by this user.
     pub async fn get_random_unstudied(state: &State, user_id: i64, limit: i64) -> Result<Vec<Tsumego>> {
-        let unstudied_tsumego = sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego WHERE id NOT IN (SELECT tsumego_id FROM user_tsumego_stats WHERE user_id = ?) ORDER BY RANDOM() LIMIT ?", user_id, limit)
+        let unstudied_tsumego = sqlx::query_as!(
+            Self,
+            "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego
+                WHERE id NOT IN (
+                    SELECT tsumego_id FROM user_tsumego_stats
+                        WHERE user_id = ?
+                )
+                ORDER BY RANDOM()
+                LIMIT ?",
+            user_id,
+            limit,
+        )
             .fetch_all(&state.db)
             .await?;
         
@@ -71,7 +86,18 @@ impl Tsumego {
         let now = time::now();
         let max_reviews = state.cfg.max_problems_at_once;
         
-        let pending = sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego WHERE id IN (SELECT tsumego_id FROM user_tsumego_stats WHERE user_id = ? AND review_due <= ?) LIMIT ?", user_id, now, max_reviews)
+        let pending = sqlx::query_as!(
+            Self,
+            "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego
+                WHERE id IN (
+                    SELECT tsumego_id FROM user_tsumego_stats
+                        WHERE user_id = ? AND review_due <= ?
+                )
+                LIMIT ?",
+            user_id,
+            now,
+            max_reviews,
+        )
             .fetch_all(&state.db)
             .await?;
         

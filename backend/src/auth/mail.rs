@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use string_template::Template;
 
-use crate::{result::Result, state::State};
+use crate::{
+    result::Result,
+    state::State,
+};
 
 /// An error which might occur when trying to send an email.
 #[derive(Debug)]

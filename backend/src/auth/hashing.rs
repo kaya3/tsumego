@@ -1,5 +1,10 @@
 use argon2::Argon2;
-use password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
+use password_hash::{
+    PasswordHash,
+    PasswordHasher,
+    PasswordVerifier,
+    SaltString,
+};
 
 use crate::result::Result;
 

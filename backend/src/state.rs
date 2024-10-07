@@ -1,4 +1,7 @@
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+use sqlx::sqlite::{
+    SqlitePool,
+    SqlitePoolOptions,
+};
 
 use crate::config::Config;
 

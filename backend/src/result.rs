@@ -1,4 +1,9 @@
-use actix_web::{body::{BoxBody, MessageBody}, http::StatusCode, HttpResponse, ResponseError};
+use actix_web::{
+    body::{BoxBody, MessageBody},
+    http::StatusCode,
+    HttpResponse,
+    ResponseError,
+};
 
 pub type Result<T, E = AppError> = std::result::Result<T, E>;
 

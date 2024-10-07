@@ -1,7 +1,11 @@
 use actix_web::rt::{spawn, time};
 use std::time::Duration;
 
-use crate::{model::{Session, User}, result::Result, state::State};
+use crate::{
+    model::{Session, User},
+    result::Result,
+    state::State,
+};
 
 pub fn start(state: State) {
     spawn(async move {

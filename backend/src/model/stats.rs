@@ -1,7 +1,10 @@
 use rand::Rng;
 
-use crate::{state::State, result::Result};
-use super::{srs::LearningState, time, Grade, SrsState};
+use crate::{
+    model::{srs::LearningState, time, Grade, SrsState},
+    state::State,
+    result::Result,
+};
 
 #[derive(serde::Serialize)]
 pub struct UserTsumegoStats {
@@ -80,7 +83,13 @@ impl From<FlatStats> for UserTsumegoStats {
 
 impl UserTsumegoStats {
     pub async fn get_by_id(state: &State, id: i64) -> Result<Option<Self>> {
-        let stats = sqlx::query_as!(FlatStats, "SELECT * FROM user_tsumego_stats WHERE id = ? LIMIT 1", id)
+        let stats = sqlx::query_as!(
+            FlatStats,
+            "SELECT * FROM user_tsumego_stats
+                WHERE id = ?
+                LIMIT 1",
+            id,
+        )
             .fetch_optional(&state.db)
             .await?
             .map(Self::from);
@@ -89,7 +98,14 @@ impl UserTsumegoStats {
     }
     
     pub async fn get(state: &State, user_id: i64, tsumego_id: i64) -> Result<Option<Self>> {
-        let stats = sqlx::query_as!(FlatStats, "SELECT * FROM user_tsumego_stats WHERE user_id = ? AND tsumego_id = ? LIMIT 1", user_id, tsumego_id)
+        let stats = sqlx::query_as!(
+            FlatStats,
+            "SELECT * FROM user_tsumego_stats
+                WHERE user_id = ? AND tsumego_id = ?
+                LIMIT 1",
+            user_id,
+            tsumego_id,
+        )
             .fetch_optional(&state.db)
             .await?
             .map(Self::from);
@@ -106,7 +122,15 @@ impl UserTsumegoStats {
         
         // Insert a record of this review.
         let grade_int = grade as usize as i64;
-        sqlx::query!("INSERT INTO user_tsumego_reviews (user_id, tsumego_id, review_date, grade) VALUES (?, ?, ?, ?)", user_id, tsumego_id, now, grade_int)
+        sqlx::query!(
+            "INSERT INTO user_tsumego_reviews
+                (user_id, tsumego_id, review_date, grade)
+                VALUES (?, ?, ?, ?)",
+            user_id,
+            tsumego_id,
+            now,
+            grade_int,
+        )
             .execute(&state.db)
             .await?;
         
@@ -142,7 +166,20 @@ impl UserTsumegoStats {
             Some(time::add_days(now, srs_state.interval * fuzz))
         };
         
-        let id = sqlx::query_scalar!("INSERT OR REPLACE INTO user_tsumego_stats (user_id, tsumego_id, last_review_date, review_due, num_reviews, streak_length, interval, e_factor) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id", user_id, tsumego_id, now, review_due, srs_state.num_reviews, srs_state.streak_length, srs_state.interval, srs_state.e_factor)
+        let id = sqlx::query_scalar!(
+            "INSERT OR REPLACE INTO user_tsumego_stats
+                (user_id, tsumego_id, last_review_date, review_due, num_reviews, streak_length, interval, e_factor)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id",
+            user_id,
+            tsumego_id,
+            now,
+            review_due,
+            srs_state.num_reviews,
+            srs_state.streak_length,
+            srs_state.interval,
+            srs_state.e_factor,
+        )
             .fetch_one(&state.db)
             .await?;
         

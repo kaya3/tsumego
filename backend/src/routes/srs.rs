@@ -1,5 +1,8 @@
 use actix_web::{
-    post, web::{Json, ServiceConfig}, HttpResponse, Responder
+    post,
+    web::{Json, ServiceConfig},
+    HttpResponse,
+    Responder,
 };
 
 use crate::{
