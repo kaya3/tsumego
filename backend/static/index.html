@@ -25,9 +25,45 @@
             </div>
             <div class="text-row">
                 <input id="login_submit" type="submit" value="Log In">
+                <button id="begin_registration_button">Register</button>
             </div>
-            <div id="login_message"></div>
+            <div id="login_message" class="error_message"></div>
         </form>
+    </div>
+    
+    <div id="register_page" class="page hidden">
+        <h1>Tsumego Practice</h1>
+        <p>
+            Register an account by filling in your details below.
+            You will receive a link to activate your account, at the email address you provide.
+        </p>
+        <form id="register_form" class="column">
+            <div class="text-row">
+                <label for="register_email">Email:</label>
+                <input id="register_email" name="email">
+            </div>
+            <div class="text-row">
+                <label for="register_display_name">Display name:</label>
+                <input id="register_display_name" name="display_name">
+            </div>
+            <div class="text-row">
+                <label for="register_password">Password:</label>
+                <input id="register_password" name="password" type="password">
+            </div>
+            <div class="text-row">
+                <label for="register_confirm_password">Confirm password:</label>
+                <input id="register_confirm_password" name="password" type="password">
+            </div>
+            <div class="text-row">
+                <input id="register_submit" type="submit" value="Register">
+            </div>
+            <div id="register_message" class="error_message"></div>
+        </form>
+    </div>
+    
+    <div id="register_success_page" class="page hidden">
+        <p>Your account is registered! Check your email to find the verification link.</p>
+        <!-- <button id="resend_verification_code">Resend Verification Code</button> -->
     </div>
     
     <div id="logged_in_header" class="header text-row hidden">

@@ -6,6 +6,7 @@ namespace Pages {
         private readonly email: HTMLInputElement;
         private readonly password: HTMLInputElement;
         private readonly submitButton: HTMLInputElement;
+        private readonly registerButton: HTMLButtonElement;
         private readonly message: HTMLElement;
         
         public constructor(app: App) {
@@ -15,6 +16,7 @@ namespace Pages {
             this.email = expectElementById('login_email', 'input');
             this.password = expectElementById('login_password', 'input');
             this.submitButton = expectElementById('login_submit', 'input');
+            this.registerButton = expectElementById('begin_registration_button', 'button');
             this.message = expectElementById('login_message');
         }
         
@@ -22,11 +24,21 @@ namespace Pages {
             this.form.addEventListener('submit', async e => {
                 e.preventDefault();
                 
-                this.submitButton.disabled = true;
-                
-                const email = this.email.value;
+                const email = this.email.value.trim();
                 const password = this.password.value;
                 
+                if(!email.includes('@')) {
+                    this.message.innerText = 'Please enter your email address';
+                    this.email.focus();
+                    return;
+                } else if(!password) {
+                    this.message.innerText = 'Please enter your password';
+                    this.password.focus();
+                    return;
+                }
+                
+                this.submitButton.disabled = true;
+                this.registerButton.disabled = true;
                 const user = await API.login(email, password);
                 if(user) {
                     // This also shows the header
@@ -37,25 +49,36 @@ namespace Pages {
                     this.app.mainMenuPage.show(user);
                 } else {
                     this.message.innerText = 'Incorrect email or password';
+                    this.email.focus();
                     this.submitButton.disabled = false;
+                    this.registerButton.disabled = false;
                 }
+            });
+            
+            this.registerButton.addEventListener('click', () => {
+                const email = this.email.value.trim();
+                const password = this.password.value;
                 
-                return false;
+                this.hide();
+                this.app.registerPage.show({email, password});
             });
         }
         
-        protected onShow(params: {email: string | null | undefined}): void {
-            this.email.value = params.email ?? '';
+        protected onShow(data: {email: string | null | undefined}): void {
+            this.email.value = data.email ?? '';
             this.submitButton.disabled = false;
-            this.app.loggedInHeader.hide();
+            this.registerButton.disabled = false;
+            this.message.innerText = '';
             
-            (params.email ? this.password : this.email).focus();
+            this.app.loggedInHeader.hide();
+            (data.email ? this.password : this.email).focus();
         }
         
         protected onHide(): void {
             this.email.value = '';
             this.password.value = '';
             this.submitButton.disabled = true;
+            this.registerButton.disabled = true;
             this.message.innerText = '';
         }
     }

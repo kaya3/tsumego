@@ -1,7 +1,27 @@
 class App {
+    public static rememberEmail(email: string): void {
+        // Remember the user's email address for next time they log in
+        // It's OK if this fails, so just catch and suppress
+        try {
+            localStorage.setItem('userEmail', email);
+        } catch(_ignored) {}
+    }
+    
+    private static recallEmail(): string | null {
+        // Try to load a previously remembered email address
+        // It's OK if this fails, so just catch and suppress
+        try {
+            return localStorage.getItem('userEmail');
+        } catch(_ignored) {}
+        
+        return null;
+    }
+    
     public readonly loggedInHeader = new LoggedInHeader(this);
     
     public readonly loginPage = new Pages.LoginForm(this);
+    public readonly registerPage = new Pages.RegisterPage(this);
+    public readonly registerSuccessPage = new Pages.RegisterSuccessPage(this);
     public readonly mainMenuPage = new Pages.MainMenu(this);
     public readonly attemptTsumegoPage = new Pages.AttemptTsumego(this);
     
@@ -12,12 +32,7 @@ class App {
         this.currentUser = user;
         
         if(user) {
-            // Remember the user's email address for next time they log in
-            // It's OK if this fails, so just catch and suppress
-            try {
-                localStorage.setItem('userEmail', user.email);
-            } catch(_ignored) {}
-            
+            App.rememberEmail(user.email);
             this.loggedInHeader.show(user);
         } else {
             this.loggedInHeader.hide();
@@ -33,11 +48,7 @@ class App {
             this.mainMenuPage.show(user);
         } else {
             // Populate the login form with the previously-used email address
-            // It's OK if this fails, so just catch and suppress
-            let email: string | null = null;
-            try {
-                email = localStorage.getItem('userEmail');
-            } catch(_ignored) {}
+            let email = App.recallEmail();
             
             this.loginPage.show({email});
         }

@@ -57,9 +57,10 @@ button, input[type="submit"] {
 #header_username { font-weight: bold; cursor: pointer; }
 
 #login_page { max-width: 20em; }
+#register_page { max-width: 25em; }
 
-#login_form label { flex-grow: 1; }
-#login_message { color: red; }
+form label { flex-grow: 1; }
+.error_message { color: red; }
 
 #attempt_board { position: relative; }
 #attempt_board canvas { z-index: 0; }
