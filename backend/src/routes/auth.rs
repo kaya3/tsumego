@@ -1,4 +1,3 @@
-use actix_files::NamedFile;
 use actix_web::{
     get, post, web::{Json, Query, ServiceConfig}, HttpRequest, HttpResponse, Responder
 };
@@ -43,7 +42,13 @@ async fn verify_account(state: State, query: Query<VerifyForm>) -> Result<impl R
     let query = query.into_inner();
     User::verify_account(&state, query.id, &query.code).await?;
     
-    Ok(NamedFile::open_async("templates/account_verified.html").await?)
+    // Construct a response with no headers suggesting this is a static file
+    let response_body = std::fs::read_to_string("templates/account_verified.html")?;
+    let response = HttpResponse::Ok()
+        .content_type("text/html")
+        .body(response_body);
+    
+    Ok(response)
 }
 
 #[derive(serde::Deserialize)]
