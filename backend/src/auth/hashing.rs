@@ -12,10 +12,14 @@ use crate::result::Result;
 /// number of bytes is not a multiple of 3, the encoded token will end with
 /// filler characters which add no entropy.
 pub const SESSION_TOKEN_BYTES: usize = 18;
-pub const VERIFICATION_TOKEN_BYTES: usize = 18;
+
+/// The number of bytes of entropy in a new user verification code.
+pub const VERIFICATION_CODE_BYTES: usize = 18;
 
 /// Checks a password against a stored password hash, returning `true` if the
-/// password is correct and `false` otherwise.
+/// password is correct and `false` otherwise. This function is used for
+/// passwords when logging in, and for verification codes when registering a
+/// new account.
 /// 
 /// Returns an error if the stored hash is invalid.
 pub fn check_password(stored_hash: &str, given_password: &str) -> Result<bool> {
@@ -51,7 +55,7 @@ pub fn generate_password_hash(new_password: &str) -> Result<String> {
 /// Use the `check_password` function to compare a verification code against
 /// a stored hash.
 pub fn generate_verification_code() -> Result<(String, String)> {
-    let code = generate_base64_token::<VERIFICATION_TOKEN_BYTES>();
+    let code = generate_base64_token::<VERIFICATION_CODE_BYTES>();
     let hash = generate_password_hash(code.as_str())?;
     
     Ok((code, hash))
@@ -87,7 +91,8 @@ pub fn token_hash(s: &str) -> String {
     base64_encode(&hasher.finalize())
 }
 
-/// Generates a random token with `N` bytes of entropy, base64-encoded.
+/// Generates a random token with `N` bytes of entropy, base64-encoded. The
+/// encoded token is URL-safe.
 fn generate_base64_token<const N: usize>() -> String {
     use rand::{Rng, thread_rng};
     

@@ -22,11 +22,16 @@ impl MaybeAuth {
         }
     }
     
+    /// Registers this authentication state with the request, so that route
+    /// handlers can get the current authentication state. This should only
+    /// be called by the authentication middleware.
     pub fn insert_into_request(self, request: &impl HttpMessage) {
         request.extensions_mut()
             .insert(self);
     }
     
+    /// Gets the authentication state for the request. This can be called from
+    /// route handlers.
     pub fn get_from_request(request: &HttpRequest) -> Self {
         request.extensions()
             .get::<Self>()
@@ -34,6 +39,9 @@ impl MaybeAuth {
             .unwrap_or(Self::Unauthenticated)
     }
     
+    /// Determines the authentication state from the user's session token, and
+    /// a needed action (if any) to update the client's cookie in case their
+    /// token is renewed, or the token is expired or otherwise invalid.
     pub async fn authenticate_by_session_token(state: &State, token: &str) -> Result<(Self, AuthTokenAction)> {
         #[derive(sqlx::FromRow)]
         struct SessionRecord {
@@ -52,7 +60,8 @@ impl MaybeAuth {
             .await?;
         
         let Some(session) = maybe_session else {
-            return Ok((Self::Unauthenticated, AuthTokenAction::DoNothing));
+            // The user's cookie doesn't match a valid session - revoke it.
+            return Ok((Self::Unauthenticated, AuthTokenAction::Revoke));
         };
         
         // For some reason, SQLx thinks this is nullable
