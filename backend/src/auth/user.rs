@@ -1,6 +1,6 @@
 use actix_web::{dev::Payload, FromRequest, HttpMessage, HttpRequest};
 
-use crate::{model::{time::now, Session, User}, result::{AppError, OrAppError, Result}, state::State};
+use crate::{model::{time::{delta_days, now}, Session, User}, result::{AppError, OrAppError, Result}, state::State};
 use super::{hashing, AuthTokenAction};
 
 impl User {
@@ -43,29 +43,21 @@ impl MaybeAuth {
     /// a needed action (if any) to update the client's cookie in case their
     /// token is renewed, or the token is expired or otherwise invalid.
     pub async fn authenticate_by_session_token(state: &State, token: &str) -> Result<(Self, AuthTokenAction)> {
-        #[derive(sqlx::FromRow)]
-        struct SessionRecord {
-            id: i64,
-            user_id: i64,
-            days_left: Option<f64>,
-        }
-        
-        let now = now();
-        
         let hash = hashing::token_hash(token);
         // This is giving a compilation error with SQLx 0.8.2 but not 0.7.3
         // TODO: report an issue
-        let maybe_session = sqlx::query_as!(SessionRecord, "SELECT id, user_id, (julianday(expires) - julianday(?)) AS days_left FROM sessions WHERE token_hash = ? LIMIT 1", now, hash)
+        let maybe_session = sqlx::query_as!(Session, "SELECT id, user_id, expires FROM sessions WHERE token_hash = ? LIMIT 1", hash)
             .fetch_optional(&state.db)
             .await?;
         
         let Some(session) = maybe_session else {
             // The user's cookie doesn't match a valid session - revoke it.
+            // They probably have an old cookie, the session expired and was
+            // deleted from the database.
             return Ok((Self::Unauthenticated, AuthTokenAction::Revoke));
         };
         
-        // For some reason, SQLx thinks this is nullable
-        let days_left = session.days_left.expect("session expiry should be non-null");
+        let days_left = delta_days(now(), session.expires);
         
         // Check whether to revoke an expired session
         if days_left <= 0.0 {
