@@ -6,6 +6,7 @@ pub type Result<T, E = AppError> = std::result::Result<T, E>;
 pub enum AppError {
     Status(StatusCode),
     Hasher(password_hash::Error),
+    Mail(crate::auth::MailError),
     Io(std::io::Error),
     Sql(sqlx::Error),
 }
@@ -37,9 +38,9 @@ impl ResponseError for AppError {
     fn error_response(&self) -> HttpResponse<BoxBody> {
         // Display the full error in a debug build, but just the status in a
         // release build
-        #[cfg(debug)]
+        #[cfg(debug_assertions)]
         let reason = format!("{self:?}");
-        #[cfg(not(debug))]
+        #[cfg(not(debug_assertions))]
         let reason = format!("{self}");
         
         HttpResponse::new(self.status_code())
@@ -50,6 +51,12 @@ impl ResponseError for AppError {
 impl From<std::io::Error> for AppError {
     fn from(err: std::io::Error) -> Self {
         AppError::Io(err)
+    }
+}
+
+impl From<crate::auth::MailError> for AppError {
+    fn from(err: crate::auth::MailError) -> Self {
+        AppError::Mail(err)
     }
 }
 
@@ -66,11 +73,18 @@ impl From<password_hash::Error> for AppError {
 }
 
 pub trait OrAppError<T> {
+    fn or_400_bad_request(self) -> Result<T>;
     fn or_401_unauthorised(self) -> Result<T>;
     fn or_404_not_found(self) -> Result<T>;
 }
 
 impl <T> OrAppError<T> for Option<T> {
+    /// Converts this `Option` into a `Result`, replacing `None` with an HTTP
+    /// "400 Bad Request" error.
+    fn or_400_bad_request(self) -> Result<T> {
+        self.map_or(Err(AppError::BAD_REQUEST), Ok)
+    }
+    
     /// Converts this `Option` into a `Result`, replacing `None` with an HTTP
     /// "401 Unauthorized" error.
     fn or_401_unauthorised(self) -> Result<T> {

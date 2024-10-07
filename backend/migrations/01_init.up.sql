@@ -14,7 +14,16 @@ CREATE TABLE IF NOT EXISTS sessions (
     token_hash VARCHAR NOT NULL,
     expires DATETIME NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS sessions_token_hash_unique ON sessions (token_hash);
+
+CREATE TABLE IF NOT EXISTS user_verification_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    email VARCHAR COLLATE NOCASE NOT NULL,
+    display_name VARCHAR NOT NULL,
+    password_hash VARCHAR NOT NULL,
+    code_hash VARCHAR NOT NULL,
+    expires DATETIME NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS verification_codes_email_unique ON user_verification_codes (email);
 
 -- Tsumego
 CREATE TABLE IF NOT EXISTS tsumego (

@@ -1,7 +1,24 @@
 namespace API {
+    const REGISTER_ENDPOINT = '/api/register';
     const LOGIN_ENDPOINT = '/api/login';
     const LOGOUT_ENDPOINT = '/api/logout';
     const WHO_AM_I_ENDPOINT = '/api/who_am_i';
+    
+    export interface RegistrationOutcome {
+        readonly verificationID: number;
+        readonly error: string | null;
+    };
+    
+    export async function register(email: string, displayName: string, password: string): Promise<RegistrationOutcome | null> {
+        const response = await post(REGISTER_ENDPOINT, {email, displayName, password});
+        
+        if(response.ok) {
+            return await response.json();
+        } else {
+            reportError('Failed to register', response);
+            return null;
+        }
+    }
     
     export async function login(email: string, password: string): Promise<UserDetails | null> {
         const response = await post(LOGIN_ENDPOINT, {email, password});
@@ -9,6 +26,7 @@ namespace API {
         if(response.ok) {
             return await response.json();
         } else {
+            // TODO: treat "wrong password" as a different kind of error, so message makes sense
             reportError('Failed login', response);
             return null;
         }

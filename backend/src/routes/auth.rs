@@ -1,5 +1,6 @@
+use actix_files::NamedFile;
 use actix_web::{
-    get, post, web::{ServiceConfig, Json}, HttpRequest, HttpResponse, Responder
+    get, post, web::{Json, Query, ServiceConfig}, HttpRequest, HttpResponse, Responder
 };
 
 use crate::{
@@ -8,13 +9,48 @@ use crate::{
 
 /// Declares routes for login/logout and other authentication actions.
 pub fn declare_routes(conf: &mut ServiceConfig) {
-    conf.service(login)
+    conf.service(register_account)
+        .service(verify_account)
+        .service(login)
         .service(logout)
         .service(who_am_i);
 }
 
 #[derive(serde::Deserialize)]
-struct LoginForm {email: String, password: String}
+struct RegisterForm {
+    email: String,
+    #[serde(rename = "displayName")]
+    display_name: String,
+    password: String,
+}
+
+#[post("/api/register")]
+async fn register_account(state: State, form: Json<RegisterForm>) -> Result<impl Responder> {
+    let form = form.into_inner();
+    
+    let outcome = User::register(&state, &form.email, &form.display_name, &form.password).await?;
+    Ok(HttpResponse::Ok().json(outcome))
+}
+
+#[derive(serde::Deserialize)]
+struct VerifyForm {
+    id: i64,
+    code: String,
+}
+
+#[get("/verify_account")]
+async fn verify_account(state: State, query: Query<VerifyForm>) -> Result<impl Responder> {
+    let query = query.into_inner();
+    User::verify_account(&state, query.id, &query.code).await?;
+    
+    Ok(NamedFile::open_async("templates/account_verified.html").await?)
+}
+
+#[derive(serde::Deserialize)]
+struct LoginForm {
+    email: String,
+    password: String,
+}
 
 #[post("/api/login")]
 async fn login(state: State, request: HttpRequest, form: Json<LoginForm>) -> Result<impl Responder> {

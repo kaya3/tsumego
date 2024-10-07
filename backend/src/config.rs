@@ -8,6 +8,7 @@ pub struct Config {
     pub host_port: u16,
     
     pub base_url: CowStr,
+    pub email_from: CowStr,
     
     pub database_url: CowStr,
     pub database_pool_size: u32,
