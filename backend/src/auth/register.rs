@@ -5,6 +5,9 @@ use crate::{
     state::State,
 };
 
+/// NIST recommends requiring a minimum password length of 8 characters.
+const MINIMUM_PASSWORD_LENGTH: usize = 8;
+
 struct UnverifiedUser {
     email: String,
     display_name: String,
@@ -29,23 +32,10 @@ pub enum RegistrationError {
     EmailAlreadyExists,
     #[serde(rename = "Failed to send an email with the verification link")]
     EmailFailed,
-}
-
-impl RegistrationOutcome {
-    const MALFORMED_EMAIL: Self = Self {
-        verification_id: -1,
-        error: Some(RegistrationError::MalformedEmail),
-    };
-    
-    const EMAIL_ALREADY_EXISTS: Self = Self {
-        verification_id: -1,
-        error: Some(RegistrationError::EmailAlreadyExists),
-    };
-    
-    const EMAIL_FAILED: Self = Self {
-        verification_id: -1,
-        error: Some(RegistrationError::EmailFailed),
-    };
+    #[serde(rename = "Please choose a display name")]
+    MissingDisplayName,
+    #[serde(rename = "Please choose a password of at least 8 characters")]
+    PasswordTooShort,
 }
 
 impl User {
@@ -55,11 +45,31 @@ impl User {
     /// table. If registration is unsuccessful due to an  if registration
     /// is successful, or an error message otherwise.
     pub async fn register(state: &State, email: &str, display_name: &str, password: &str) -> Result<RegistrationOutcome> {
+        fn error(error: RegistrationError) -> Result<RegistrationOutcome> {
+            Ok(RegistrationOutcome {
+                verification_id: -1,
+                error: Some(error),
+            })
+        }
+        
+        // Repeat client-side checks, since we don't necessarily trust that
+        // they were done.
+        
         // Simple check to see if this looks like an email address. In general
         // the only sure way to validate an email address is to try sending
         // mail there.
         if !email.contains('@') {
-            return Ok(RegistrationOutcome::MALFORMED_EMAIL);
+            return error(RegistrationError::MalformedEmail);
+        } else if display_name.is_empty() {
+            return error(RegistrationError::MissingDisplayName);
+        }
+        
+        // NIST recommend to require a minimum password length, but to NOT
+        // require passwords to have certain compositions (e.g. include upper
+        // and lowercase letters, special characters, etc.).
+        // https://pages.nist.gov/800-63-3/sp800-63b.html#5111-memorized-secret-authenticators
+        if password.len() < MINIMUM_PASSWORD_LENGTH {
+            return error(RegistrationError::PasswordTooShort);
         }
         
         // Check if this email is already in use
@@ -75,7 +85,7 @@ impl User {
             .await?;
         
         if email_already_exists > 0 {
-            return Ok(RegistrationOutcome::EMAIL_ALREADY_EXISTS);
+            return error(RegistrationError::EmailAlreadyExists);
         }
         
         // Generate verification code
@@ -109,8 +119,8 @@ impl User {
             delete_verification_code_by_id(state, verification_id)
                 .await?;
             
-            return Ok(RegistrationOutcome::EMAIL_FAILED);
-        }
+                return error(RegistrationError::EmailFailed);
+            }
         
         Ok(RegistrationOutcome {
             verification_id,

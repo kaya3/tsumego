@@ -41,7 +41,7 @@ namespace Pages {
                 const password = this.password.value;
                 const confirmPassword = this.confirmPassword.value;
                 
-                // Some simple client-side validation
+                // Some simple client-side validation.
                 if(!email.includes('@')) {
                     this.message.innerText = 'Please enter your email address';
                     this.email.focus();
@@ -50,8 +50,11 @@ namespace Pages {
                     this.message.innerText = 'Please choose a display name';
                     this.displayName.focus();
                     return;
-                } else if(!password) {
-                    this.message.innerText = 'Please choose a password';
+                } else if(password.length < 8) {
+                    // NIST recommends a minimum password length of 8, but no
+                    // composition requirements (e.g. upper and lowercase).
+                    // https://pages.nist.gov/800-63-3/sp800-63b.html#5111-memorized-secret-authenticators
+                    this.message.innerText = 'Please choose a password of at least 8 characters';
                     this.password.focus();
                     return;
                 } else if(password !== confirmPassword) {

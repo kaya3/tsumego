@@ -35,7 +35,9 @@ struct RegisterForm {
 async fn register_account(state: State, form: Json<RegisterForm>) -> Result<impl Responder> {
     let form = form.into_inner();
     
-    let outcome = User::register(&state, &form.email, &form.display_name, &form.password).await?;
+    let outcome = User::register(&state, &form.email.trim(), &form.display_name.trim(), &form.password)
+        .await?;
+    
     Ok(HttpResponse::Ok().json(outcome))
 }
 
