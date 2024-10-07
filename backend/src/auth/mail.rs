@@ -39,7 +39,7 @@ pub fn send_confirmation_email(state: &State, to: &str, verification_id: i64, co
     args.insert("code", code);
     
     let body = template.render(&args);
-    send_email(state, to, "", body)?;
+    send_email(state, to, "Verify your account", body)?;
     Ok(())
 }
 
