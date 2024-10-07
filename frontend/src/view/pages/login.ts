@@ -49,9 +49,11 @@ namespace Pages {
                     this.app.mainMenuPage.show(user);
                 } else {
                     this.message.innerText = 'Incorrect email or password';
-                    this.email.focus();
                     this.submitButton.disabled = false;
                     this.registerButton.disabled = false;
+                    
+                    // Wrong password is more likely, since email is remembered
+                    this.password.focus();
                 }
             });
             
