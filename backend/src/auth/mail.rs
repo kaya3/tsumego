@@ -1,5 +1,5 @@
-use string_template::Template;                                                            
 use std::collections::HashMap;
+use string_template::Template;
 
 use crate::{result::Result, state::State};
 
@@ -55,6 +55,7 @@ fn send_email(#[allow(unused)] state: &State, to: &str, subject: &str, body: Str
             message::header::ContentType,
             transport::smtp::SmtpTransport,
             Message,
+            Transport,
         };
         
         let email = Message::builder()
