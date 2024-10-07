@@ -1,6 +1,6 @@
 Welcome to Tsumego Practice. To confirm your account, please follow the link
 below in the next 24 hours:
 
-    {{base_url}}verify_account?id={{verification_id}}&code={{code}}
+    {{link}}
 
 If you did not create an account, please ignore this email.

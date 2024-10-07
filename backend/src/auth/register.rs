@@ -1,6 +1,12 @@
-use crate::{auth::hashing::{check_password, generate_password_hash}, model::{time, User}, result::{AppError, OrAppError, Result}, state::State};
-
-use super::{hashing::generate_verification_code, send_confirmation_email};
+use crate::{
+    auth::{
+        hashing::{check_password, generate_password_hash, generate_verification_code},
+        send_confirmation_email,
+    },
+    model::{time, User},
+    result::{AppError, OrAppError, Result},
+    state::State,
+};
 
 struct UnverifiedUser {
     verification_id: i64,
@@ -52,7 +58,9 @@ impl User {
             .await?;
         
         // Send confirmation email
-        send_confirmation_email(state, email, verification_id, code.as_str())?;
+        let base_url = &state.cfg.base_url;
+        let confirmation_link = format!("{base_url}verify_account?id={verification_id}&code={code}");
+        send_confirmation_email(state, email, confirmation_link.as_str())?;
         
         Ok(RegistrationOutcome {
             verification_id,

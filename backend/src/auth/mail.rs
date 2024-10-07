@@ -28,18 +28,17 @@ impl From<lettre::transport::smtp::Error> for MailError {
     }
 }
 
-pub fn send_confirmation_email(state: &State, to: &str, verification_id: i64, code: &str) -> Result<()> {
+/// Sends a confirmation email to the given email address, with a link to
+/// activate the new user account.
+pub fn send_confirmation_email(state: &State, email_address: &str, link: &str) -> Result<()> {
     let template_src = std::fs::read_to_string("templates/confirmation_email.txt")?;
     let template = Template::new(template_src.as_str());
     
-    let id = verification_id.to_string();
     let mut args = HashMap::new();
-    args.insert("base_url", state.cfg.base_url.as_ref());
-    args.insert("verification_id", id.as_str());
-    args.insert("code", code);
+    args.insert("link", link);
     
     let body = template.render(&args);
-    send_email(state, to, "Verify your account", body)?;
+    send_email(state, email_address, "Verify your account", body)?;
     Ok(())
 }
 
