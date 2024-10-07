@@ -43,6 +43,13 @@ impl Default for SrsState {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub enum LearningState {
+    Learning = 0,
+    Relearning = 1,
+    Mature = 2,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, serde::Deserialize)]
 pub enum Grade {
     Again = 0,
@@ -87,8 +94,6 @@ impl SrsState {
         let previous = self;
         let mut next = self.clone();
         
-        let is_learning = previous.streak_length <= 2;
-        
         next.num_reviews += 1;
         
         if grade == Grade::Again {
@@ -96,14 +101,14 @@ impl SrsState {
             next.streak_length = 0;
             next.interval = FIRST_INTERVAL;
             
-            if !is_learning {
+            if !previous.is_learning() {
                 next.e_factor = clamp_e_factor(previous.e_factor - 0.2);
             }
         } else {
             // Passed
             next.streak_length += 1;
             
-            if is_learning {
+            if previous.is_learning() {
                 // Learning phase: use fixed intervals
                 next.interval = if grade == Grade::Easy {
                     EASY_INTERVAL
@@ -139,6 +144,20 @@ impl SrsState {
         }
         
         next
+    }
+    
+    pub fn is_learning(&self) -> bool {
+        matches!(self.learning_state(), LearningState::Learning | LearningState::Relearning)
+    }
+    
+    pub fn learning_state(&self) -> LearningState {
+        if self.streak_length >= 3 {
+            LearningState::Mature
+        } else if self.streak_length == self.num_reviews {
+            LearningState::Learning
+        } else {
+            LearningState::Relearning
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 use rand::Rng;
 
 use crate::{state::State, result::Result};
-use super::{time, Grade, SrsState};
+use super::{srs::LearningState, time, Grade, SrsState};
 
 #[derive(serde::Serialize)]
 pub struct UserTsumegoStats {
@@ -24,6 +24,13 @@ pub struct UserTsumegoStats {
     /// past but is not currently in rotation, and shouldn't be prompted.
     #[serde(rename = "reviewDue")]
     review_due: Option<time::DateTime>,
+    
+    /// This user's learning state for this tsumego, indicating whether they
+    /// are learning or relearning it, or otherwise if they know it well.
+    /// 
+    /// A value of `None` means the tsumego is not currently in rotation.
+    #[serde(rename = "learningState")]
+    learning_state: Option<LearningState>,
     
     /// The spaced repetition system (SRS) state representing this user's
     /// memory of this tsumego.
@@ -52,18 +59,21 @@ struct FlatStats {
 
 impl From<FlatStats> for UserTsumegoStats {
     fn from(flat: FlatStats) -> Self {
+        let srs_state = SrsState {
+            num_reviews: flat.num_reviews,
+            streak_length: flat.streak_length,
+            interval: flat.interval,
+            e_factor: flat.e_factor,
+        };
+        
         Self {
             id: flat.id,
             user_id: flat.user_id,
             tsumego_id: flat.tsumego_id,
             last_review_date: flat.last_review_date,
             review_due: flat.review_due,
-            srs_state: SrsState {
-                num_reviews: flat.num_reviews,
-                streak_length: flat.streak_length,
-                interval: flat.interval,
-                e_factor: flat.e_factor,
-            },
+            learning_state: get_learning_state(&flat.review_due, &srs_state),
+            srs_state,
         }
     }
 }
@@ -143,6 +153,7 @@ impl UserTsumegoStats {
                 tsumego_id,
                 last_review_date: now,
                 review_due,
+                learning_state: get_learning_state(&review_due, &srs_state),
                 srs_state,
             },
             Some(stats) => Self {
@@ -154,5 +165,13 @@ impl UserTsumegoStats {
         };
         
         Ok(new_stats)
+    }
+}
+
+fn get_learning_state(review_due: &Option<time::DateTime>, srs_state: &SrsState) -> Option<LearningState> {
+    if review_due.is_none() {
+        None
+    } else {
+        Some(srs_state.learning_state())
     }
 }

@@ -110,6 +110,7 @@ namespace Pages {
         
         private async submitReview(grade: Grade): Promise<void> {
             const stats = await API.postReview(this.tsumego[this.index].id, grade);
+            const again = stats && showAgainToday(stats);
             
             const user = this.app.currentUser;
             if(user) {
@@ -117,19 +118,16 @@ namespace Pages {
                 // TODO: this isn't exactly right, since this review might
                 // not have been due; perhaps it was reviewed early, or not
                 // scheduled at all
-                if(stats && stats?.srsState.interval >= 1) {
-                    // `interval >= 1` means this tsumego is no longer due today
+                if(!again) {
                     if(user.reviewsDueToday > 0) {
                         user.reviewsDueToday--;
                     }
                 }
             }
             
-            // TODO: response should say whether to add this tsumego back into the queue
-            
             // If this tsumego is due to be reviewed again today, add it
             // again to the end of the queue
-            if(stats && stats.srsState.interval < 1) {
+            if(again) {
                 this.tsumego.push(this.tsumego[this.index]);
             }
         }
@@ -153,5 +151,10 @@ namespace Pages {
                 this.app.navigateHome();
             }
         }
+    }
+    
+    function showAgainToday(stats: TsumegoStats): boolean {
+        return (stats.learningState === 'Learning' || stats.learningState === 'Relearning')
+            && stats.srsState.interval < 1;
     }
 }
