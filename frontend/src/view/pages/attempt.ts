@@ -77,7 +77,7 @@ namespace Pages {
             }
             
             this.tsumego = data;
-            this.index = 0;
+            this.index = -1;
             this.showNextTsumego();
             this.resultContainer.classList.add('hidden');
         }

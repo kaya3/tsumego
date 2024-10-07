@@ -1,6 +1,6 @@
 use actix_web::{
     get,
-    web::{Path, ServiceConfig},
+    web::{Path, Query, ServiceConfig},
     HttpResponse,
     Responder,
 };
@@ -38,15 +38,26 @@ async fn get_pending(state: State, user: User) -> Result<impl Responder> {
     })))
 }
 
-#[get("/api/get_random_unstudied/{limit}")]
-async fn get_random_unstudied(state: State, user: User, limit: Path<i64>) -> Result<impl Responder> {
-    let limit = limit.into_inner();
+#[derive(serde::Deserialize)]
+struct GetProblemsLimit {
+    limit: i64,
+}
+
+#[get("/api/get_random_unstudied")]
+async fn get_random_unstudied(state: State, user: User, limit: Query<GetProblemsLimit>) -> Result<impl Responder> {
+    let limit = limit.into_inner().limit;
     if limit < 1 || limit > state.cfg.max_problems_at_once {
         return Err(AppError::BAD_REQUEST);
     }
     
-    let problems = Tsumego::get_random_unstudied(&state, user.id, limit)
+    let mut problems = Tsumego::get_random_unstudied(&state, user.id, limit)
         .await?;
+    
+    // If we didn't find any new problems, choose some old ones.
+    if problems.is_empty() {
+        problems = Tsumego::get_random(&state, limit)
+            .await?;
+    }
     
     Ok(HttpResponse::Ok().json(json!({
         "problems": problems,

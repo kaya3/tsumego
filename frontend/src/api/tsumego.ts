@@ -2,7 +2,7 @@ namespace API {
     const NUM_UNSTUDIED = 5;
     
     const GET_PENDING_ENDPOINT = '/api/get_pending';
-    const GET_UNSTUDIED_ENDPOINT = `/api/get_random_unstudied/${NUM_UNSTUDIED}`;
+    const GET_UNSTUDIED_ENDPOINT = `/api/get_random_unstudied?limit=${NUM_UNSTUDIED}`;
     
     /**
      * Ask the user for tsumego problems which are due for this user to review.
@@ -13,7 +13,8 @@ namespace API {
     
     /**
      * Ask the server for some random tsumego problems which the current user
-     * has not yet studied.
+     * has not yet studied. The server may return previously-studied tsumego if
+     * there are not enough unstudied tsumego.
      */
     export function getUnstudiedTsumego(): Promise<TsumegoData[]> {
         return getTsumegoArray(GET_UNSTUDIED_ENDPOINT);

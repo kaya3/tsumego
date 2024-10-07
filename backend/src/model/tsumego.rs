@@ -45,6 +45,15 @@ impl Tsumego {
         Ok(tsumego)
     }
     
+    /// Fetches up to `limit` randomly-selected tsumego from the database.
+    pub async fn get_random(state: &State, limit: i64) -> Result<Vec<Tsumego>> {
+        let tsumego = sqlx::query_as!(Self, "SELECT id, name, board, tree \"tree: JsonValue\" FROM tsumego ORDER BY RANDOM() LIMIT ?", limit)
+            .fetch_all(&state.db)
+            .await?;
+        
+        Ok(tsumego)
+    }
+    
     /// Fetches up to `limit` randomly-selected tsumego from the database,
     /// which haven't yet been studied by this user.
     pub async fn get_random_unstudied(state: &State, user_id: i64, limit: i64) -> Result<Vec<Tsumego>> {

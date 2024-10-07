@@ -34,6 +34,9 @@ namespace Pages {
             });
             this.studyRandomButton.addEventListener('click', async () => {
                 this.hide();
+                
+                // This API call should always return a non-empty array. If it
+                // is empty somehow, the attempt page will handle it.
                 const tsumego = await API.getUnstudiedTsumego();
                 this.app.attemptTsumegoPage.show(tsumego);
             });
