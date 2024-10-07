@@ -58,7 +58,7 @@ button, input[type="submit"] {
 
 #login_page { max-width: 40em; }
 #login_form { max-width: 20em; margin: 0 auto; }
-#register_form { max-width: 25em; }
+#register_form { max-width: 25em; margin: 0 auto; }
 
 form label { flex-grow: 1; }
 .error_message { color: red; }

@@ -1,3 +1,6 @@
+use string_template::Template;                                                            
+use std::collections::HashMap;
+
 use crate::{result::Result, state::State};
 
 #[derive(Debug)]
@@ -26,15 +29,16 @@ impl From<lettre::transport::smtp::Error> for MailError {
 }
 
 pub fn send_confirmation_email(state: &State, to: &str, verification_id: i64, code: &str) -> Result<()> {
-    // TODO: load template from somewhere else
-    let body = format!(
-"Welcome to Tsumego Practice. To confirm your account, please follow the link
-below in the next 24 hours:
-
-    {}verify_account?id={verification_id}&code={code}
-
-If you did not create an account, please ignore this email.
-", state.cfg.base_url);
+    let template_src = std::fs::read_to_string("templates/confirmation_email.txt")?;
+    let template = Template::new(template_src.as_str());
+    
+    let id = verification_id.to_string();
+    let mut args = HashMap::new();
+    args.insert("base_url", state.cfg.base_url.as_ref());
+    args.insert("verification_id", id.as_str());
+    args.insert("code", code);
+    
+    let body = template.render(&args);
     send_email(state, to, "", body)?;
     Ok(())
 }
