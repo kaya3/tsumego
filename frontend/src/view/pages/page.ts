@@ -28,7 +28,7 @@ namespace Pages {
          */
         public show(data: T): void {
             this.app.currentPage = this;
-            this.container.classList.remove('hidden');
+            show(this.container);
             
             if(!this.isHydrated) {
                 this.hydrate();
@@ -43,7 +43,7 @@ namespace Pages {
          * page to another page.
          */
         public hide(): void {
-            this.container.classList.add('hidden');
+            hide(this.container);
             this.onHide();
         }
         

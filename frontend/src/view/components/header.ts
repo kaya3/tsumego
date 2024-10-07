@@ -31,13 +31,13 @@ class LoggedInHeader {
     }
     
     public show(user: UserDetails): void {
-        this.header.classList.remove('hidden');
+        show(this.header);
         this.username.innerText = user.displayName;
         this.logoutButton.disabled = false;
     }
     
     public hide(): void {
-        this.header.classList.add('hidden');
+        hide(this.header);
         this.logoutButton.disabled = true;
     }
 }

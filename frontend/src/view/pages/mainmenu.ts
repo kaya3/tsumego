@@ -47,26 +47,22 @@ namespace Pages {
                 this.todaySummary.innerHTML = data.reviewsDoneToday > 0
                     ? `You've done <b>${pluralise(data.reviewsDoneToday, 'problem')}</b> today, and have <b>${data.reviewsDueToday}</b> left to review.`
                     : `You have <b>${pluralise(data.reviewsDueToday, 'problem')}</b> to review today.`;
-                this.beginReviewingButton.disabled = false;
-                this.beginReviewingButton.classList.remove('hidden');
-                this.studyRandomButton.disabled = true;
-                this.studyRandomButton.classList.add('hidden');
+                
+                showAndEnable(this.beginReviewingButton);
+                hideAndDisable(this.studyRandomButton);
             } else {
                 this.todaySummary.innerHTML = data.reviewsDoneToday
                     ? `You've done <b>${pluralise(data.reviewsDoneToday, 'problem')}</b> today.`
                     : `No reviews due today, but you can try some new problems!`;
-                this.beginReviewingButton.disabled = true;
-                this.beginReviewingButton.classList.add('hidden');
-                this.studyRandomButton.disabled = false;
-                this.studyRandomButton.classList.remove('hidden');
+                
+                hideAndDisable(this.beginReviewingButton);
+                showAndEnable(this.studyRandomButton);
             }
         }
         
         protected onHide(): void {
-            this.beginReviewingButton.disabled = true;
-            this.beginReviewingButton.classList.add('hidden');
-            this.studyRandomButton.disabled = true;
-            this.studyRandomButton.classList.add('hidden');
+            hideAndDisable(this.beginReviewingButton);
+            hideAndDisable(this.studyRandomButton);
         }
     }
 }

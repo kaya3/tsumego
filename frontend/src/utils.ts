@@ -33,6 +33,37 @@ function expectElementById(id: string, tag?: string): HTMLElement {
 }
 
 /**
+ * Shows the given HTML element, by removing the `hidden` class if present.
+ */
+function show(element: HTMLElement): void {
+    element.classList.remove('hidden');
+}
+
+/**
+ * Hides the given HTML element, by adding the `hidden` class if not already
+ * present.
+ */
+function hide(element: HTMLElement): void {
+    element.classList.add('hidden');
+}
+
+/**
+ * Shows and enables the given button.
+ */
+function showAndEnable(button: HTMLButtonElement | HTMLInputElement): void {
+    show(button);
+    button.disabled = false;
+}
+
+/**
+ * Hides and disables the given button.
+ */
+function hideAndDisable(button: HTMLButtonElement | HTMLInputElement): void {
+    hide(button);
+    button.disabled = true;
+}
+
+/**
  * Returns a string like `"1 problem"` or `"5 problems"`, given the count and
  * the singular noun. The plural form of the noun can be given as an optional
  * argument; by default, it is the singular noun followed by the letter 's'.

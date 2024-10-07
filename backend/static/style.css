@@ -56,7 +56,7 @@ button, input[type="submit"] {
 #logged_in_header { justify-content: space-between; }
 #header_username { font-weight: bold; cursor: pointer; }
 
-#login_page { max-width: 40em; }
+#login_page, #register_page { max-width: 40em; }
 #login_form { max-width: 20em; margin: 0 auto; }
 #register_form { max-width: 25em; margin: 0 auto; }
 

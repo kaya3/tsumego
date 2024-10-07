@@ -38,10 +38,7 @@ namespace Pages {
                 
                 if(isWin) {
                     // Show review buttons
-                    this.reviewButtonContainer.classList.remove('hidden');
-                    for(const button of this.reviewButtons) {
-                        button.disabled = false;
-                    }
+                    this.showReviewButtons();
                 } else {
                     // Submit review immediately
                     await this.submitReview('Again');
@@ -79,20 +76,20 @@ namespace Pages {
             this.tsumego = data;
             this.index = -1;
             this.showNextTsumego();
-            this.resultContainer.classList.add('hidden');
+            hide(this.resultContainer);
         }
         
         protected onHide(): void {
             this.tsumego = [];
             this.index = 0;
             this.view.clear();
-            this.resultContainer.classList.add('hidden');
+            hide(this.resultContainer);
             this.hideReviewButtons();
         }
         
         private showMessage(isWin: boolean): void {
             let resultContainer = this.resultContainer;
-            resultContainer.classList.remove('hidden');
+            show(resultContainer);
             if(isWin) {
                 resultContainer.classList.add('correct');
                 resultContainer.innerText = 'Correct!';
@@ -132,8 +129,15 @@ namespace Pages {
             }
         }
         
+        private showReviewButtons(): void {
+            show(this.reviewButtonContainer);
+            for(const button of this.reviewButtons) {
+                button.disabled = false;
+            }
+        }
+        
         private hideReviewButtons(): void {
-            this.reviewButtonContainer.classList.add('hidden');
+            hide(this.reviewButtonContainer);
             for(const button of this.reviewButtons) {
                 button.disabled = true;
             }
@@ -145,7 +149,7 @@ namespace Pages {
                 const data = this.tsumego[this.index];
                 const tsumego = Tsumego.fromData(data);
                 this.view.setTsumego(tsumego);
-                this.resultContainer.classList.add('hidden');
+                hide(this.resultContainer);
                 this.hideReviewButtons();
             } else {
                 this.app.navigateHome();
