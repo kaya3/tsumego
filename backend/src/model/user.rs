@@ -86,8 +86,8 @@ impl UserDetails {
         let start_of_day = time::start_of_day(now);
         
         struct Details {
-            due_today: Option<i32>,
-            done_today: Option<i32>,
+            due_today: Option<i64>,
+            done_today: Option<i64>,
         }
         
         let details = sqlx::query_as!(
@@ -109,8 +109,8 @@ impl UserDetails {
         
         Ok(Self {
             user,
-            reviews_due_today: details.due_today.unwrap_or(0) as i64,
-            reviews_done_today: details.done_today.unwrap_or(0) as i64,
+            reviews_due_today: details.due_today.unwrap_or(0),
+            reviews_done_today: details.done_today.unwrap_or(0),
         })
     }
 }
