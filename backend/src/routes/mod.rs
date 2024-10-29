@@ -5,6 +5,8 @@ mod index;
 mod srs;
 mod tsumego;
 
+pub use auth::confirmation_link;
+
 /// Declares all routes for the application.
 pub fn declare_routes(conf: &mut ServiceConfig) {
     auth::declare_routes(conf);

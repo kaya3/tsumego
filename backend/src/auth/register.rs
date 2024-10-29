@@ -2,6 +2,7 @@ use crate::{
     auth::{hashing, send_confirmation_email},
     model::{time, User},
     result::{AppError, OrAppError, Result},
+    routes::confirmation_link,
     state::State,
 };
 
@@ -109,9 +110,8 @@ impl User {
             .await?;
         
         // Send confirmation email
-        let base_url = &state.cfg.base_url;
-        let confirmation_link = format!("{base_url}verify_account?id={verification_id}&code={code}");
-        if let Err(e) = send_confirmation_email(state, email, confirmation_link.as_str()) {
+        let link = confirmation_link(state, verification_id, code.as_str());
+        if let Err(e) = send_confirmation_email(state, email, link.as_str()) {
             log::info!("Failed to send verification link to <{email}>: {e}");
             
             // This code is unusable, since the verification link will not be
@@ -119,8 +119,8 @@ impl User {
             delete_verification_code_by_id(state, verification_id)
                 .await?;
             
-                return error(RegistrationError::EmailFailed);
-            }
+            return error(RegistrationError::EmailFailed);
+        }
         
         Ok(RegistrationOutcome {
             verification_id,

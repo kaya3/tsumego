@@ -47,6 +47,14 @@ struct VerifyForm {
     code: String,
 }
 
+/// Builds a URL for an account confirmation link, which verifies a
+/// newly-registered account when visited.
+pub fn confirmation_link(state: &State, id: i64, code: &str) -> String {
+    // This must match the `verify_account` route URL
+    let base_url = &state.cfg.base_url;
+    format!("{base_url}verify_account?id={id}&code={code}")
+}
+
 #[get("/verify_account")]
 async fn verify_account(state: State, query: Query<VerifyForm>) -> Result<impl Responder> {
     let query = query.into_inner();
