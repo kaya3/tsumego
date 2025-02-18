@@ -1,0 +1,7 @@
+Hi {{display_name}},
+
+To log into Tsumego Practice, please follow this link in the next 24 hours:
+
+    {{link}}
+
+If you did not request to log in, please ignore this email.

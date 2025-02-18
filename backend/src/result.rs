@@ -10,7 +10,7 @@ pub type Result<T, E = AppError> = std::result::Result<T, E>;
 #[derive(Debug)]
 pub enum AppError {
     Status(StatusCode),
-    Hasher(password_hash::Error),
+    Auth(authlogic::Error),
     Mail(crate::auth::MailError),
     Io(std::io::Error),
     Sql(sqlx::Error),
@@ -20,21 +20,25 @@ impl AppError {
     pub const BAD_REQUEST: AppError = AppError::Status(StatusCode::BAD_REQUEST);
     pub const UNAUTHORIZED: AppError = AppError::Status(StatusCode::UNAUTHORIZED);
     pub const NOT_FOUND: AppError = AppError::Status(StatusCode::NOT_FOUND);
+
+    pub fn http_reason(&self) -> &str {
+        self.status_code()
+            .canonical_reason()
+            .unwrap_or("Unknown error")
+    }
 }
 
 impl std::fmt::Display for AppError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // This will be shown to the client; don't leak internal error details
-        let reason = self.status_code()
-            .canonical_reason()
-            .unwrap_or("Unknown error");
-        write!(f, "{reason}")
+        self.http_reason().fmt(f)
     }
 }
 
 impl ResponseError for AppError {
     fn status_code(&self) -> StatusCode {
         match self {
+            AppError::Auth(err) => err.status_code(),
             AppError::Status(code) => *code,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -43,11 +47,16 @@ impl ResponseError for AppError {
     fn error_response(&self) -> HttpResponse<BoxBody> {
         // Display the full error in a debug build, but just the status in a
         // release build
-        #[cfg(debug_assertions)]
-        let reason = format!("{self:?}");
-        #[cfg(not(debug_assertions))]
-        let reason = format!("{self}");
-        
+        let reason = if cfg!(debug_assertions) {
+            format!("{self:?}") 
+        } else {
+            self.http_reason().to_string()
+        };
+
+        if self.status_code().is_server_error() {
+            log::error!("{}: {self:?}", self.http_reason());
+        }
+
         HttpResponse::new(self.status_code())
             .set_body(MessageBody::boxed(reason))
     }
@@ -56,6 +65,12 @@ impl ResponseError for AppError {
 impl From<std::io::Error> for AppError {
     fn from(err: std::io::Error) -> Self {
         AppError::Io(err)
+    }
+}
+
+impl From<authlogic::Error> for AppError {
+    fn from(err: authlogic::Error) -> Self {
+        AppError::Auth(err)
     }
 }
 
@@ -68,12 +83,6 @@ impl From<crate::auth::MailError> for AppError {
 impl From<sqlx::Error> for AppError {
     fn from(err: sqlx::Error) -> Self {
         AppError::Sql(err)
-    }
-}
-
-impl From<password_hash::Error> for AppError {
-    fn from(err: password_hash::Error) -> Self {
-        AppError::Hasher(err)
     }
 }
 

@@ -1,6 +1,0 @@
-Welcome to Tsumego Practice. To confirm your account, please follow the link
-below in the next 24 hours:
-
-    {{link}}
-
-If you did not create an account, please ignore this email.

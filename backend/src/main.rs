@@ -1,9 +1,3 @@
-use actix_web::{
-    middleware::Logger,
-    App,
-    HttpServer,
-};
-
 mod auth;
 mod config;
 mod middleware;
@@ -38,17 +32,19 @@ async fn main() -> std::io::Result<()> {
     let host_port = state.cfg.host_port;
     println!("Listening on {host_addr}:{host_port}");
     
+    use actix_web::{App, HttpServer, middleware};
+
     HttpServer::new(move || {
         App::new()
             .app_data(state.clone())
             .configure(routes::declare_routes)
-            .wrap(actix_web::middleware::from_fn(middleware::auth_middleware))
+            .wrap(middleware::from_fn(authlogic::middleware::<state::State>))
             // CSRF protection applies before we authenticate the user
-            .wrap(actix_web::middleware::from_fn(middleware::csrf_middleware))
+            .wrap(middleware::from_fn(crate::middleware::csrf_middleware))
             // Logging is the outer-most middleware, so the log can see all
             // requests before other middleware touches them, and all responses
             // after they are finalised
-            .wrap(Logger::default())
+            .wrap(middleware::Logger::default())
     })
         .bind((host_addr, host_port))?
         .run()

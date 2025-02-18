@@ -1,0 +1,8 @@
+Hi {{display_name}},
+
+Welcome to Tsumego Practice! To confirm your account, please follow the link
+below in the next 24 hours:
+
+    {{link}}
+
+If you did not create this account yourself, please ignore this email.

@@ -2,7 +2,6 @@ use actix_web::rt::{spawn, time};
 use std::time::Duration;
 
 use crate::{
-    model::{Session, User},
     result::Result,
     state::State,
 };
@@ -15,11 +14,11 @@ pub fn start(state: State) {
         loop {
             interval.tick().await;
             
-            Session::delete_all_expired(&state)
+            state.delete_all_expired_sessions()
                 .await
                 .report_if_err();
             
-            User::delete_unverified_expired(&state)
+            state.delete_expired_challenges()
                 .await
                 .report_if_err();
         }

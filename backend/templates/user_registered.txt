@@ -1,0 +1,8 @@
+Hi {{display_name}},
+
+Welcome to Tsumego Practice! You can log into your new account using the
+password below. Once you log in, you will be asked to choose a new password.
+
+    Temporary password: {{temporary_password}}
+
+If you did not create this account yourself, please ignore this email.

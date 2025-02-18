@@ -39,10 +39,9 @@ pub async fn csrf_middleware(
 }
 
 fn is_bad_request(request: &ServiceRequest) -> bool {
-    let state: State = request
+    let state: &State = request
         .app_data::<State>()
-        .expect("State should be available from app data")
-        .clone();
+        .expect("State should be available from app data");
     
     // Referer must exist and match this origin
     let expected_origin = state.cfg.base_url.as_ref();

@@ -1,23 +1,25 @@
 use actix_web::{
     get,
     post,
-    web::{Json, Query, ServiceConfig},
+    web::{Json, Query, Redirect, ServiceConfig},
     HttpRequest,
     HttpResponse,
     Responder,
 };
 
+use authlogic::Secret;
+
 use crate::{
-    auth::{AuthTokenAction, MaybeAuth},
-    model::{Session, User, UserDetails},
-    result::{AppError, Result},
+    auth::MaybeAuth,
+    model::{User, UserDetails},
+    result::Result,
     state::State,
 };
 
 /// Declares routes for login/logout and other authentication actions.
 pub fn declare_routes(conf: &mut ServiceConfig) {
     conf.service(register_account)
-        .service(verify_account)
+        .service(verify_challenge)
         .service(login)
         .service(logout)
         .service(who_am_i);
@@ -28,40 +30,61 @@ struct RegisterForm {
     email: String,
     #[serde(rename = "displayName")]
     display_name: String,
-    password: String,
+    password: Secret,
 }
 
 #[post("/api/register")]
 async fn register_account(state: State, form: Json<RegisterForm>) -> Result<impl Responder> {
     let form = form.into_inner();
+    let user = User {
+        id: -1,
+        email: form.email,
+        display_name: form.display_name,
+        is_admin: false,
+    };
     
-    let outcome = User::register(&state, &form.email.trim(), &form.display_name.trim(), &form.password)
+    let outcome = crate::auth::register(&state, user, form.password)
         .await?;
-    
     Ok(HttpResponse::Ok().json(outcome))
 }
 
 #[derive(serde::Deserialize)]
-struct VerifyForm {
-    id: i64,
-    code: String,
+struct ChallengeForm {
+    code: Secret,
 }
 
-/// Builds a URL for an account confirmation link, which verifies a
-/// newly-registered account when visited.
-pub fn confirmation_link(state: &State, id: i64, code: &str) -> String {
-    // This must match the `verify_account` route URL
+/// Builds a URL for a link which completes a challenge when visited.
+pub fn confirmation_link(state: &State, code: Secret) -> String {
+    // This must match the `verify` route URL
     let base_url = &state.cfg.base_url;
-    format!("{base_url}verify_account?id={id}&code={code}")
+    format!("{base_url}verify?code={}", code.expose())
 }
 
-#[get("/verify_account")]
-async fn verify_account(state: State, query: Query<VerifyForm>) -> Result<impl Responder> {
-    let query = query.into_inner();
-    User::verify_account(&state, query.id, &query.code).await?;
+#[get("/verify")]
+async fn verify_challenge(state: State, request: HttpRequest, query: Query<ChallengeForm>) -> Result<impl Responder> {
+    use authlogic::mail::{Challenge, complete_challenge};
     
-    // Construct a response with no headers suggesting this is a static file
-    let response_body = std::fs::read_to_string("templates/account_verified.html")?;
+    let code = query.into_inner().code;
+    let (_, challenge) = complete_challenge(&state, code, &request)
+        .await?;
+    
+    let response_body = match challenge {
+        Challenge::LogIn |
+        Challenge::ResetPassword => {
+            let response = Redirect::to("/")
+                .temporary()
+                .respond_to(&request)
+                .map_into_boxed_body();
+            return Ok(response);
+        },
+        Challenge::VerifyNewUser => {
+            std::fs::read_to_string("templates/account_verified.html")?
+        },
+        Challenge::Custom(c) => c.never_happens(),
+    };
+    
+    // Construct a response manually; using `actix_files` would send cache
+    // headers, which we don't want
     let response = HttpResponse::Ok()
         .content_type("text/html")
         .body(response_body);
@@ -72,48 +95,24 @@ async fn verify_account(state: State, query: Query<VerifyForm>) -> Result<impl R
 #[derive(serde::Deserialize)]
 struct LoginForm {
     email: String,
-    password: String,
+    password: Secret,
 }
 
 #[post("/api/login")]
 async fn login(state: State, request: HttpRequest, form: Json<LoginForm>) -> Result<impl Responder> {
-    let user = User::get_by_email(&state, &form.email)
+    let form = form.into_inner();
+    let user = authlogic::login(&state, &form.email, form.password, &request)
         .await?;
     
-    match user {
-        Some(user) if user.check_password(&state, &form.password).await? => {
-            log::info!("Successful login for user #{} <{}>", user.id, user.email);
-            
-            let token = Session::begin_for_user(&state, user.id)
-                .await?;
-            
-            AuthTokenAction::Issue(token)
-                .insert_into_request(&request);
-            
-            let user_details = UserDetails::get_for_user(&state, user).await?;
-            
-            Ok(HttpResponse::Ok().json(user_details))
-        },
-        user => {
-            let reason = if user.is_some() {"invalid password"} else {"no such user"};
-            log::info!("Failed login for <{}>: {reason}", form.email);
-            
-            // Same response for "no such user" as for "invalid password", to
-            // avoid leaking information about which email addresses have
-            // registered accounts
-            Err(AppError::UNAUTHORIZED)
-        },
-    }
+    let user_details = UserDetails::get_for_user(&state, user)
+        .await?;
+    Ok(HttpResponse::Ok().json(user_details))
 }
 
 #[post("/api/logout")]
 async fn logout(state: State, request: HttpRequest, auth: MaybeAuth) -> Result<impl Responder> {
-    if let MaybeAuth::Authenticated {user, session_id} = auth {
-        log::info!("Successful logout for user #{} <{}>", user.id, user.email);
-        
-        Session::revoke_by_id(&state, session_id).await?;
-        AuthTokenAction::Revoke.insert_into_request(&request);
-    };
+    auth.logout(&state, &request)
+        .await?;
     
     Ok(HttpResponse::Ok())
 }
@@ -122,7 +121,8 @@ async fn logout(state: State, request: HttpRequest, auth: MaybeAuth) -> Result<i
 async fn who_am_i(state: State, auth: MaybeAuth) -> Result<impl Responder> {
     let user_details = match auth.user() {
         Some(user) => {
-            let details = UserDetails::get_for_user(&state, user).await?;
+            let details = UserDetails::get_for_user(&state, user)
+                .await?;
             Some(details)
         },
         None => None,

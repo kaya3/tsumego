@@ -1,11 +1,10 @@
-mod hashing;
+mod db;
 mod mail;
-mod register;
-mod session;
-mod token_action;
+mod state;
 mod user;
 
-pub use mail::{MailError, send_confirmation_email};
-pub use register::RegistrationOutcome;
-pub use token_action::AuthTokenAction;
-pub use user::MaybeAuth;
+pub use mail::MailError;
+pub use user::register;
+
+pub type MaybeAuth = authlogic::MaybeAuth<crate::state::State>;
+pub type Auth = authlogic::Auth<crate::state::State>;

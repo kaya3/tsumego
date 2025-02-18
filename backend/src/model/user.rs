@@ -4,7 +4,7 @@ use crate::{
     state::State,
 };
 
-#[derive(Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, sqlx::Type)]
 pub struct User {
     pub id: i64,
     pub email: String,
@@ -23,12 +23,13 @@ impl User {
             .map_or(Err(sqlx::Error::RowNotFound.into()), Ok)
     }
     
-    /// Retrieves the user with the given id, if they exist.
+    /// Retrieves the active user with the given id, if they exist.
     pub async fn get_by_id(state: &State, id: i64) -> Result<Option<Self>> {
         let user = sqlx::query_as!(
             Self,
             "SELECT id, email, display_name, is_admin FROM users
-                WHERE id = ?",
+                WHERE id = ?
+                AND require_email_verification = 0",
             id,
         )
             .fetch_optional(&state.db)
@@ -37,28 +38,12 @@ impl User {
         Ok(user)
     }
     
-    /// Retrieves the user with the given email address, if they exist.
-    pub async fn get_by_email(state: &State, email: &str) -> Result<Option<Self>> {
-        // The `users.email` column is declared with `NOCASE`, so there is no
-        // need to normalise before querying
-        let user = sqlx::query_as!(
-            Self,
-            "SELECT id, email, display_name, is_admin FROM users
-                WHERE email = ?
-                LIMIT 1",
-            email,
-        )
-            .fetch_optional(&state.db)
-            .await?;
-        
-        Ok(user)
-    }
-    
-    /// Retrieves a vector of all users in the database.
+    /// Retrieves a vector of all active users in the database.
     pub async fn get_all(state: &State) -> Result<Vec<Self>> {
         let users = sqlx::query_as!(
             Self,
             "SELECT id, email, display_name, is_admin FROM users
+                WHERE require_email_verification = 0
                 ORDER by id",
         )
             .fetch_all(&state.db)

@@ -1,145 +1,89 @@
-use actix_web::{
-    dev::Payload,
-    FromRequest,
-    HttpMessage,
-    HttpRequest,
-};
-
 use crate::{
-    auth::{hashing, AuthTokenAction},
-    model::{time, Session, User},
-    result::{AppError, OrAppError, Result},
+    model::User,
+    result::{AppError, Result},
     state::State,
 };
 
-impl User {
-    pub async fn check_password(&self, state: &State, given_password: &str) -> Result<bool> {
-        let password_hash = sqlx::query_scalar!(
-            "SELECT password_hash FROM users WHERE id = ?",
-            self.id,
-        )
-            .fetch_one(&state.db)
-            .await?;
-        
-        hashing::check_password(password_hash.as_str(), given_password)
+impl authlogic::UserID<i64> for User {
+    fn id(&self) -> i64 {
+        self.id
+    }
+
+    fn set_id(&mut self, new_id: i64) {
+        self.id = new_id;
     }
 }
 
-impl MaybeAuth {
-    /// Gets the authenticated user, if there is one.
-    pub fn user(self) -> Option<User> {
-        match self {
-            MaybeAuth::Authenticated {user, ..} => Some(user),
-            MaybeAuth::Unauthenticated => None,
-        }
-    }
-    
-    /// Registers this authentication state with the request, so that route
-    /// handlers can get the current authentication state. This should only
-    /// be called by the authentication middleware.
-    pub fn insert_into_request(self, request: &impl HttpMessage) {
-        request.extensions_mut()
-            .insert(self);
-    }
-    
-    /// Gets the authentication state for the request. This can be called from
-    /// route handlers.
-    pub fn get_from_request(request: &HttpRequest) -> Self {
-        request.extensions()
-            .get::<Self>()
-            .cloned()
-            .unwrap_or(Self::Unauthenticated)
-    }
-    
-    /// Determines the authentication state from the user's session token, and
-    /// a needed action (if any) to update the client's cookie in case their
-    /// token is renewed, or the token is expired or otherwise invalid.
-    pub async fn authenticate_by_session_token(state: &State, token: &str) -> Result<(Self, AuthTokenAction)> {
-        let hash = hashing::token_hash(token);
-        // This is giving a compilation error with SQLx 0.8.2 but not 0.7.3
-        // TODO: report an issue
-        let maybe_session = sqlx::query_as!(
-            Session,
-            "SELECT id, user_id, expires
-                FROM sessions
-                WHERE token_hash = ?
-                LIMIT 1",
-            hash,
-        )
-            .fetch_optional(&state.db)
-            .await?;
-        
-        let Some(session) = maybe_session else {
-            // The user's cookie doesn't match a valid session - revoke it.
-            // They probably have an old cookie, the session expired and was
-            // deleted from the database.
-            return Ok((Self::Unauthenticated, AuthTokenAction::Revoke));
-        };
-        
-        let days_left = time::delta_days(time::now(), session.expires);
-        
-        // Check whether to revoke an expired session
-        if days_left <= 0.0 {
-            Session::revoke_by_id(state, session.id).await?;
-            return Ok((Self::Unauthenticated, AuthTokenAction::Revoke));
-        }
-        
-        // Check whether to renew the session
-        let renewal_period = (state.cfg.session_duration_days - state.cfg.session_renew_after_days) as f64;
-        let token_action = if days_left <= renewal_period {
-            log::info!("Renewing session #{} for {} days", session.id, state.cfg.session_duration_days);
-            let token = Session::renew(state, session.id).await?;
-            AuthTokenAction::Issue(token)
-        } else {
-            AuthTokenAction::DoNothing
-        };
-        
-        let user = User::require_by_id(state, session.user_id)
-            .await?;
-        
-        let auth = Self::Authenticated {
-            user,
-            session_id: session.id,
-        };
-        Ok((auth, token_action))
-    }
+#[derive(serde::Serialize)]
+pub struct RegistrationOutcome {
+    #[serde(rename = "newUserID")]
+    pub new_user_id: i64,
+    pub error: Option<RegistrationError>,
 }
 
-/// Represents either an authenticated user, or that the current user is not
-/// authenticated. Equivalent to an `Option` of `(user, session_id)`, but Rust
-/// doesn't allow implementing third-party traits like `actix_web::FromRequest`
-/// for built-in types like `Option`.
-#[derive(Clone)]
-pub enum MaybeAuth {
-    Authenticated {user: User, session_id: i64},
-    Unauthenticated,
+/// Represents an error preventing registration of a new user, which should be
+/// resolved by the user entering different details.
+#[derive(serde::Serialize)]
+pub enum RegistrationError {
+    #[serde(rename = "Malformed email address")]
+    MalformedEmail,
+    #[serde(rename = "Email address already in use")]
+    EmailAlreadyExists,
+    #[serde(rename = "Failed to send an email with the verification link")]
+    EmailFailed,
+    #[serde(rename = "Please choose a display name")]
+    MissingDisplayName,
+    #[serde(rename = "Please choose a password of at least 8 characters")]
+    PasswordTooShort,
 }
 
-impl From<MaybeAuth> for Option<User> {
-    fn from(auth: MaybeAuth) -> Self {
-        auth.user()
+/// Registers a new unverified user in the database, and sends an email to
+/// their address with a verification link. If registration is successful,
+/// the outcome contains the id of the new row in the `user_verification_codes`
+/// table. If registration is unsuccessful due to an  if registration
+/// is successful, or an error message otherwise.
+pub async fn register(state: &State, user: User, password: authlogic::Secret) -> Result<RegistrationOutcome> {
+    fn error_outcome(error: RegistrationError) -> Result<RegistrationOutcome> {
+        Ok(RegistrationOutcome {
+            new_user_id: -1,
+            error: Some(error),
+        })
     }
-}
-
-impl FromRequest for MaybeAuth {
-    type Error = AppError;
-    type Future = std::future::Ready<Result<Self>>;
     
-    fn from_request(request: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        let auth = MaybeAuth::get_from_request(request);
-        std::future::ready(Ok(auth))
+    // Repeat client-side checks, since we don't necessarily trust that
+    // they were done.
+    
+    // Simple check to see if this looks like an email address. In general
+    // the only sure way to validate an email address is to try sending
+    // mail there.
+    if !user.email.contains('@') {
+        return error_outcome(RegistrationError::MalformedEmail);
+    } else if user.display_name.is_empty() {
+        return error_outcome(RegistrationError::MissingDisplayName);
     }
-}
-
-impl FromRequest for User {
-    type Error = AppError;
-    type Future = std::future::Ready<Result<Self>>;
     
-    fn from_request(request: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        let result = MaybeAuth::get_from_request(request)
-            .user()
-            .or_401_unauthorised();
+    // Check if this email is already in use
+    let email_already_exists = sqlx::query_scalar!(
+        "SELECT COUNT(1) FROM users WHERE email = ?",
+        user.email,
+    )
+        .fetch_one(&state.db)
+        .await?;
+    
+    if email_already_exists > 0 {
+        return error_outcome(RegistrationError::EmailAlreadyExists);
+    }
+    
+    let result = authlogic::register_new_user(state, user, password).await;
+    
+    match result {
+        Ok(user) => Ok(RegistrationOutcome {
+            new_user_id: user.id,
+            error: None,
+        }),
         
-        std::future::ready(result)
+        Err(AppError::Auth(authlogic::Error::PasswordTooShort)) => error_outcome(RegistrationError::PasswordTooShort),
+        Err(AppError::Mail(_)) => error_outcome(RegistrationError::EmailFailed),
+        Err(e) => Err(e),
     }
 }
